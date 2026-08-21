@@ -4,6 +4,20 @@ import { logger } from "./lib/logger";
 import { setupWebSocket } from "./ws/priceStreamer";
 import { setupDepositScanner } from "./ws/depositScanner";
 
+// ── Boot safety nets ────────────────────────────────────────────────────────
+// A silent death here looks identical to a port mismatch from the platform's
+// health checker ("service unavailable" retry loop with empty logs). Route
+// EVERY fatal path through stderr so deploys always fail with a reason.
+process.on("uncaughtException", (err) => {
+  console.error("[boot:fatal] uncaughtException:", err);
+  process.exit(1);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[boot:fatal] unhandledRejection:", reason);
+});
+
+console.log("[boot] starting — node", process.version);
+
 // PORT is injected by every platform (Railway, Render, Koyeb, Docker).
 // Default to 8080 (the image's EXPOSE) instead of crashing when a host
 // forgets to inject it — a silent-looking "service unavailable" health-check
@@ -21,7 +35,9 @@ const server = http.createServer(app);
 setupWebSocket(server);
 setupDepositScanner(logger);
 
-server.listen(port, () => {
+console.log("[boot] imports ok, binding server…");
+
+server.listen(port, "0.0.0.0", () => {
   // Plain-text line (in addition to the structured pino entry) so the bound
   // port is unmistakable when scanning platform deploy logs for the value
   // that must match the platform's health-check/probe target port.
