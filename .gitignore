@@ -56,3 +56,6 @@ Thumbs.db
 .env.*
 **/.env
 *.pem
+
+# Replit artifacts
+.replit-artifact/
