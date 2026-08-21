@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VelozTrade — Client Overview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue:      #0072FF;
+      --blue-light:#3D9BFF;
+      --cyan:      #00D4FF;
+      --navy:      #020B18;
+      --navy-mid:  #071428;
+      --navy-card: #0D2240;
+      --border:    #1A3A6B;
+      --text:      #E8F4FF;
+      --muted:     #7CA3CC;
+      --success:   #00C48C;
+      --gold:      #F5A623;
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: #111827;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 0;
+      gap: 0;
+    }
+
+    /* ── Download button (screen only) ─────────────────────── */
+    #dl-btn {
+      position: fixed;
+      bottom: 28px; right: 28px;
+      background: linear-gradient(135deg, var(--blue) 0%, #0055CC 100%);
+      color: #fff;
+      font-family: 'Outfit', sans-serif;
+      font-size: 13pt;
+      font-weight: 700;
+      border: none;
+      border-radius: 12px;
+      padding: 14px 28px;
+      cursor: pointer;
+      box-shadow: 0 6px 28px rgba(0,114,255,0.45);
+      z-index: 9999;
+      transition: opacity .2s;
+    }
+    #dl-btn:hover { opacity: .88; }
+    @media print { #dl-btn { display: none !important; } }
+
+    /* ── A4 page ────────────────────────────────────────────── */
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      background: var(--navy);
+      color: var(--text);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 12px;
+      box-shadow: 0 8px 48px rgba(0,0,0,0.7);
+    }
+
+    /* ── Cover ──────────────────────────────────────────────── */
+    .cover {
+      background: linear-gradient(155deg, #010810 0%, #061020 55%, #0C1E3A 100%);
+      justify-content: space-between;
+    }
+
+    .cover-grid {
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(0,114,255,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,114,255,0.05) 1px, transparent 1px);
+      background-size: 26px 26px;
+    }
+    .cover-glow {
+      position: absolute; top: -100px; right: -100px;
+      width: 380px; height: 380px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(0,114,255,0.22) 0%, transparent 70%);
+    }
+    .cover-glow2 {
+      position: absolute; bottom: 60px; left: -80px;
+      width: 280px; height: 280px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(0,212,255,0.10) 0%, transparent 70%);
+    }
+
+    .cover-inner {
+      position: relative; z-index: 2;
+      display: flex; flex-direction: column;
+      justify-content: space-between;
+      height: 100%; padding: 14mm 14mm 11mm;
+    }
+
+    .logo-wrap { display: flex; align-items: center; gap: 10px; }
+    .logo-mark {
+      width: 40px; height: 40px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18pt; font-weight: 900; color: #fff;
+    }
+    .logo-text { font-size: 18pt; font-weight: 800; }
+    .logo-text span { color: var(--blue); }
+
+    .cover-tag {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: rgba(0,114,255,0.14);
+      border: 1px solid rgba(0,114,255,0.38);
+      border-radius: 20px; padding: 4px 14px;
+      font-size: 8.5pt; font-weight: 700;
+      color: var(--blue-light); letter-spacing: .08em;
+      text-transform: uppercase; width: fit-content;
+    }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); }
+
+    .cover-h1 {
+      font-size: 42pt; font-weight: 900;
+      line-height: 1.02; letter-spacing: -.03em;
+      margin-top: 6mm;
+    }
+    .cover-h1 span { color: var(--blue); }
+
+    .cover-rule { width: 42mm; height: 2px; background: linear-gradient(90deg, var(--blue), transparent); margin: 5mm 0; }
+
+    .cover-sub {
+      font-size: 12pt; color: var(--muted);
+      font-weight: 400; line-height: 1.6; max-width: 148mm;
+    }
+
+    .cover-stats { display: flex; gap: 9mm; margin-top: 10mm; }
+    .cs { display: flex; flex-direction: column; gap: 2px; }
+    .cs-val { font-size: 21pt; font-weight: 800; color: var(--blue-light); letter-spacing: -.02em; }
+    .cs-lbl { font-size: 7.5pt; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .07em; }
+    .cs-div { width: 1px; background: var(--border); }
+
+    .cover-foot {
+      border-top: 1px solid var(--border); padding-top: 6mm;
+      display: flex; justify-content: space-between; align-items: flex-end;
+    }
+    .cf-col { display: flex; flex-direction: column; gap: 1.5mm; }
+    .cf-lbl { font-size: 7.5pt; color: var(--muted); }
+    .cf-val { font-size: 9pt; font-weight: 600; }
+
+    /* ── Page chrome ────────────────────────────────────────── */
+    .ph {
+      height: 11mm; background: var(--navy-mid);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center;
+      justify-content: space-between; padding: 0 11mm;
+      flex-shrink: 0;
+    }
+    .ph-left { display: flex; align-items: center; gap: 8px; }
+    .ph-logo { font-size: 9pt; font-weight: 700; }
+    .ph-logo span { color: var(--blue); }
+    .ph-div { width: 1px; height: 14px; background: var(--border); }
+    .ph-sec { font-size: 8pt; color: var(--muted); font-weight: 500; }
+    .ph-pg { font-size: 8pt; color: var(--muted); }
+
+    .pf {
+      height: 9mm; border-top: 1px solid var(--border);
+      display: flex; align-items: center;
+      justify-content: space-between; padding: 0 11mm;
+      flex-shrink: 0;
+    }
+    .pf span { font-size: 7.5pt; color: var(--muted); }
+    .pf-a { color: var(--blue); font-weight: 600; }
+
+    /* ── Body ───────────────────────────────────────────────── */
+    .pb { flex: 1; padding: 9mm 11mm 9mm; display: flex; flex-direction: column; gap: 5mm; }
+
+    /* ── Section heading ────────────────────────────────────── */
+    .sh { padding-bottom: 5mm; border-bottom: 1px solid var(--border); margin-bottom: 1mm; }
+    .sh-tag { font-size: 7.5pt; font-weight: 700; color: var(--blue); text-transform: uppercase; letter-spacing: .10em; margin-bottom: 2mm; }
+    .sh-title { font-size: 19pt; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; margin-bottom: 2.5mm; }
+    .sh-desc { font-size: 9pt; color: var(--muted); line-height: 1.65; max-width: 155mm; }
+
+    /* ── Cards & grids ──────────────────────────────────────── */
+    .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+    .g3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4mm; }
+    .g4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 3mm; }
+    .g5 { display: grid; grid-template-columns: repeat(5,1fr); gap: 3mm; }
+
+    .card {
+      background: var(--navy-card);
+      border: 1px solid var(--border);
+      border-radius: 8px; padding: 5mm;
+    }
+    .ca { border-top: 2px solid var(--blue); }
+    .cg { border-top: 2px solid var(--gold); }
+    .cc { border-top: 2px solid var(--cyan); }
+    .cs2{ border-top: 2px solid var(--success); }
+    .cp { border-top: 2px solid #A78BFA; }
+
+    .c-tag { font-size: 7.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--blue-light); margin-bottom: 1.5mm; }
+    .c-title { font-size: 10.5pt; font-weight: 700; line-height: 1.2; margin-bottom: 2mm; }
+    .c-body { font-size: 8.5pt; color: var(--muted); line-height: 1.65; }
+    .c-val { font-size: 17pt; font-weight: 800; color: var(--blue-light); letter-spacing: -.02em; }
+    .c-unit { font-size: 8pt; color: var(--muted); font-weight: 500; }
+    .c-icon { font-size: 15pt; margin-bottom: 2.5mm; }
+
+    /* ── Pills ──────────────────────────────────────────────── */
+    .pills { display: flex; flex-wrap: wrap; gap: 2mm; margin-top: 3mm; }
+    .pill {
+      background: rgba(0,114,255,0.12); border: 1px solid rgba(0,114,255,0.30);
+      border-radius: 20px; padding: 2px 10px;
+      font-size: 8pt; font-weight: 600; color: var(--blue-light);
+    }
+    .pill-g { background: rgba(0,196,140,0.10); border-color: rgba(0,196,140,0.30); color: var(--success); }
+    .pill-o { background: rgba(245,166,35,0.10); border-color: rgba(245,166,35,0.30); color: var(--gold); }
+    .pill-m { background: rgba(124,163,204,0.08); border-color: var(--border); color: var(--muted); }
+
+    /* ── Stat row ───────────────────────────────────────────── */
+    .sr { display: flex; gap: 4mm; }
+    .sb {
+      flex: 1; background: var(--navy-card);
+      border: 1px solid var(--border); border-radius: 6px; padding: 4mm;
+    }
+    .sb-val { font-size: 17pt; font-weight: 800; color: var(--blue-light); letter-spacing: -.02em; }
+    .sb-val-g { color: var(--success); }
+    .sb-val-o { color: var(--gold); }
+    .sb-lbl { font-size: 8pt; color: var(--muted); font-weight: 500; margin-top: 1mm; }
+
+    /* ── Rule ───────────────────────────────────────────────── */
+    .rule { border: none; border-top: 1px solid var(--border); }
+
+    /* ── Numbered steps ─────────────────────────────────────── */
+    .steps { display: flex; flex-direction: column; gap: 3mm; }
+    .step { display: flex; gap: 4mm; align-items: flex-start; }
+    .step-n {
+      width: 24px; height: 24px; border-radius: 50%;
+      background: rgba(0,114,255,0.18); border: 1px solid var(--blue);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 8.5pt; font-weight: 800; color: var(--blue-light);
+      flex-shrink: 0; margin-top: 1px;
+    }
+    .step-body { flex: 1; }
+    .step-title { font-size: 9.5pt; font-weight: 700; margin-bottom: 1mm; }
+    .step-desc { font-size: 8.5pt; color: var(--muted); line-height: 1.6; }
+
+    /* ── Leverage bars ──────────────────────────────────────── */
+    .lev { display: flex; flex-direction: column; gap: 0; }
+    .lev-row { display: flex; align-items: center; gap: 3mm; padding: 2.5mm 0; border-bottom: 1px solid rgba(26,58,107,0.5); }
+    .lev-row:last-child { border-bottom: none; }
+    .lev-name { width: 26mm; font-size: 9pt; font-weight: 600; }
+    .lev-wrap { flex:1; background: rgba(0,114,255,0.08); border-radius: 3px; height: 6px; }
+    .lev-bar { height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--blue), var(--cyan)); }
+    .lev-tag { width: 16mm; text-align: right; font-size: 8.5pt; font-weight: 700; color: var(--blue-light); }
+
+    /* ── Tables ─────────────────────────────────────────────── */
+    table { width:100%; border-collapse:collapse; font-size: 8.5pt; }
+    thead tr { background: var(--navy-mid); border-bottom: 1px solid var(--border); }
+    th { padding: 2.5mm 3.5mm; text-align:left; font-size:7.5pt; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); }
+    td { padding: 2.5mm 3.5mm; border-bottom: 1px solid rgba(26,58,107,0.45); color:var(--text); line-height:1.4; }
+    tr:last-child td { border-bottom: none; }
+    .td-b { color: var(--blue-light); font-weight: 600; }
+    .td-g { color: var(--success); font-weight: 600; }
+    .td-o { color: var(--gold); font-weight: 600; }
+
+    /* ── Tier rows ──────────────────────────────────────────── */
+    .tiers { display: flex; flex-direction: column; gap: 2mm; }
+    .tr-head {
+      display: grid; grid-template-columns: 22mm 26mm 1fr 24mm;
+      gap: 3mm; background: var(--navy-mid); border-radius: 6px;
+      padding: 2.5mm 3.5mm; font-size: 7.5pt; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+    }
+    .tr-row {
+      display: grid; grid-template-columns: 22mm 26mm 1fr 24mm;
+      gap: 3mm; background: var(--navy-card); border: 1px solid var(--border);
+      border-radius: 6px; padding: 3mm 3.5mm; align-items: center; font-size: 8.5pt;
+    }
+    .tr-name { font-weight: 700; }
+
+    /* ── Benefit strip ──────────────────────────────────────── */
+    .benefit-strip {
+      background: linear-gradient(90deg, rgba(0,114,255,0.10) 0%, rgba(0,212,255,0.06) 100%);
+      border: 1px solid rgba(0,114,255,0.22);
+      border-radius: 8px; padding: 5mm 6mm;
+      display: flex; align-items: flex-start; gap: 4mm;
+    }
+    .bs-icon { font-size: 18pt; flex-shrink: 0; margin-top: 1px; }
+    .bs-title { font-size: 10pt; font-weight: 700; margin-bottom: 1.5mm; }
+    .bs-desc { font-size: 8.5pt; color: var(--muted); line-height: 1.6; }
+
+    /* ── Quote block ────────────────────────────────────────── */
+    .quote-block {
+      background: rgba(0,114,255,0.08);
+      border-left: 3px solid var(--blue);
+      border-radius: 0 8px 8px 0;
+      padding: 4mm 5mm;
+    }
+    .q-text { font-size: 9.5pt; font-style: italic; line-height: 1.65; color: var(--text); }
+    .q-note { font-size: 8pt; color: var(--muted); margin-top: 2mm; }
+
+    /* ── Example box ────────────────────────────────────────── */
+    .ex-box {
+      background: var(--navy-card);
+      border: 1px dashed rgba(0,212,255,0.30);
+      border-radius: 8px; padding: 4mm 5mm;
+    }
+    .ex-label { font-size: 7.5pt; font-weight: 700; color: var(--cyan); text-transform: uppercase; letter-spacing: .09em; margin-bottom: 2mm; }
+    .ex-body { font-size: 8.5pt; color: var(--muted); line-height: 1.65; }
+    .ex-body strong { color: var(--text); font-weight: 600; }
+
+    /* ── Flow steps horizontal ─────────────────────────────── */
+    .h-flow { display: flex; align-items: center; gap: 2mm; }
+    .hf-step { flex:1; background: var(--navy-card); border:1px solid var(--border); border-radius:6px; padding:3.5mm; text-align:center; }
+    .hf-num { font-size: 7pt; font-weight: 700; color: var(--blue); text-transform: uppercase; letter-spacing: .09em; }
+    .hf-lbl { font-size: 8.5pt; font-weight: 700; margin-top: 1mm; }
+    .hf-sub { font-size: 7.5pt; color: var(--muted); margin-top: 0.5mm; }
+    .hf-arr { color: var(--blue); font-size: 12pt; font-weight: 700; }
+
+    /* ── Sub-label ──────────────────────────────────────────── */
+    .sub-lbl { font-size: 8.5pt; font-weight: 700; color: var(--blue-light); margin-bottom: 2mm; }
+
+    @media print {
+      body { background: white; padding: 0; }
+      .page { box-shadow: none; margin: 0; page-break-after: always; }
+      @page { size: A4; margin: 0; }
+    }
+  </style>
+</head>
+<body>
+
+<button id="dl-btn" onclick="downloadPdf()">Download PDF</button>
+<script src="/platform-dl.js"></script>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE 1 — COVER
+═══════════════════════════════════════════════════════════════ -->
+<div class="page cover">
+  <div class="cover-grid"></div>
+  <div class="cover-glow"></div>
+  <div class="cover-glow2"></div>
+  <div class="cover-inner">
+
+    <div class="logo-wrap">
+      <div class="logo-mark">V</div>
+      <div class="logo-text">Veloz<span>Trade</span></div>
+    </div>
+
+    <div>
+      <div style="margin-top:10mm;">
+        <div class="cover-tag">
+          <div class="dot"></div>
+          Client Overview &amp; Platform Guide
+        </div>
+      </div>
+
+      <div class="cover-h1" style="margin-top:6mm;">
+        Your Gateway to<br/><span>Global Markets.</span>
+      </div>
+
+      <div class="cover-rule"></div>
+
+      <div class="cover-sub">
+        Trade Forex, Crypto, Stocks, Commodities and Indices — all from a single
+        account. This guide explains what VelozTrade is, how trading works,
+        and how to get started with confidence.
+      </div>
+
+      <div class="cover-stats">
+        <div class="cs">
+          <div class="cs-val">2,000+</div>
+          <div class="cs-lbl">Instruments</div>
+        </div>
+        <div class="cs-div"></div>
+        <div class="cs">
+          <div class="cs-val">5</div>
+          <div class="cs-lbl">Asset Classes</div>
+        </div>
+        <div class="cs-div"></div>
+        <div class="cs">
+          <div class="cs-val">1:1000</div>
+          <div class="cs-lbl">Max Leverage</div>
+        </div>
+        <div class="cs-div"></div>
+        <div class="cs">
+          <div class="cs-val">24/7</div>
+          <div class="cs-lbl">Market Access</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cover-foot">
+      <div class="cf-col">
+        <div class="cf-lbl">For</div>
+        <div class="cf-val">New &amp; Existing Clients</div>
+      </div>
+      <div class="cf-col">
+        <div class="cf-lbl">Includes</div>
+        <div class="cf-val">Account Setup · Trading Basics · Features Guide</div>
+      </div>
+      <div class="cf-col" style="text-align:right;">
+        <div class="cf-lbl">Version</div>
+        <div class="cf-val">2026 Edition</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE 2 — WHAT IS VELOZTRADE
+═══════════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="ph">
+    <div class="ph-left">
+      <div class="ph-logo">Veloz<span>Trade</span></div>
+      <div class="ph-div"></div>
+      <div class="ph-sec">Welcome</div>
+    </div>
+    <div class="ph-pg">Page 2 of 6</div>
+  </div>
+
+  <div class="pb">
+
+    <div class="sh">
+      <div class="sh-tag">Introduction</div>
+      <div class="sh-title">What is VelozTrade?</div>
+      <div class="sh-desc">
+        VelozTrade is an online trading platform that lets you buy and sell financial instruments
+        from anywhere in the world. Whether you are completely new to trading or an experienced
+        investor, the platform is built to support you at every step.
+      </div>
+    </div>
+
+    <div class="g2">
+      <div class="card ca">
+        <div class="c-icon">📈</div>
+        <div class="c-tag">What You Can Do</div>
+        <div class="c-title">Trade Global Markets From One Account</div>
+        <div class="c-body">
+          Open positions on Forex currencies, Cryptocurrencies, company Stocks,
+          Commodities like Gold and Oil, and global Indices — all in a single
+          dashboard, with real-time prices updated every second.
+        </div>
+      </div>
+      <div class="card cc">
+        <div class="c-icon">🛡</div>
+        <div class="c-tag">Who It Is For</div>
+        <div class="c-title">Beginner, Intermediate &amp; Professional Traders</div>
+        <div class="c-body">
+          Every new account includes a free Demo with $10,000 in virtual funds —
+          practice trading risk-free for as long as you need before putting
+          any real money to work. Switch to Live whenever you are ready.
+        </div>
+      </div>
+    </div>
+
+    <div class="benefit-strip">
+      <div class="bs-icon">🎯</div>
+      <div>
+        <div class="bs-title">Practice First — No Pressure</div>
+        <div class="bs-desc">
+          Your VelozTrade account starts in Demo mode automatically. The demo mirrors
+          real market conditions exactly — same prices, same instruments, same features —
+          so the skills you build on demo transfer directly to live trading. There is no
+          time limit and no obligation to deposit.
+        </div>
+      </div>
+    </div>
+
+    <hr class="rule" />
+
+    <div class="sub-lbl">Three Things That Make VelozTrade Different</div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-n">1</div>
+        <div class="step-body">
+          <div class="step-title">Everything in One Place</div>
+          <div class="step-desc">Charts, order placement, portfolio tracking, live news, economic calendar, trading signals and social copy-trading are all built into the same interface. No need to jump between apps or websites.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">2</div>
+        <div class="step-body">
+          <div class="step-title">Real-Time Prices on 2,000+ Instruments</div>
+          <div class="step-desc">VelozTrade streams live market prices continuously so you always see the latest bid and ask. Prices on the chart and in the order form are the same — no delays, no discrepancies.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">3</div>
+        <div class="step-body">
+          <div class="step-title">Copy Experienced Traders Automatically</div>
+          <div class="step-desc">The AutoCopy feature lets you follow top-ranked traders on the platform and automatically mirror their trades — a powerful option for clients who want market exposure without managing every trade themselves.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sr">
+      <div class="sb">
+        <div class="sb-val">$10,000</div>
+        <div class="sb-lbl">Free demo balance to start</div>
+      </div>
+      <div class="sb">
+        <div class="sb-val sb-g">$0</div>
+        <div class="sb-lbl">Minimum deposit to open live account</div>
+      </div>
+      <div class="sb">
+        <div class="sb-val">24/7</div>
+        <div class="sb-lbl">Crypto markets available round the clock</div>
+      </div>
+      <div class="sb">
+        <div class="sb-val sb-g">Free</div>
+        <div class="sb-lbl">Platform access — no monthly fee</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="pf">
+    <span>VelozTrade Client Guide — 2026</span>
+    <span class="pf-a">veloztrade.com</span>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE 3 — WHAT CAN YOU TRADE
+═══════════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="ph">
+    <div class="ph-left">
+      <div class="ph-logo">Veloz<span>Trade</span></div>
+      <div class="ph-div"></div>
+      <div class="ph-sec">Markets</div>
+    </div>
+    <div class="ph-pg">Page 3 of 6</div>
+  </div>
+
+  <div class="pb">
+
+    <div class="sh">
+      <div class="sh-tag">Asset Classes</div>
+      <div class="sh-title">What Can You Trade?</div>
+      <div class="sh-desc">
+        VelozTrade gives you access to five global asset classes through CFD (Contract for Difference)
+        trading — meaning you profit from price movements without owning the underlying asset.
+        Go long (buy) when you expect prices to rise, or short (sell) when you expect them to fall.
+      </div>
+    </div>
+
+    <div class="g5">
+      <div class="card ca" style="padding:3.5mm;">
+        <div style="font-size:18pt; margin-bottom:2mm;">💱</div>
+        <div class="c-tag" style="font-size:7pt;">Forex</div>
+        <div class="c-body" style="font-size:7.5pt; margin-top:1mm;">Currency pairs — EUR/USD, GBP/JPY, USD/INR and 80+ more. The world's largest market, open 5 days a week.</div>
+        <div style="margin-top:3mm;" class="pill" style="font-size:7pt;">1:1000</div>
+      </div>
+      <div class="card cg" style="padding:3.5mm;">
+        <div style="font-size:18pt; margin-bottom:2mm;">₿</div>
+        <div class="c-tag" style="font-size:7pt;">Crypto</div>
+        <div class="c-body" style="font-size:7.5pt; margin-top:1mm;">Bitcoin, Ethereum, Solana, XRP, BNB, DOGE and top altcoins. Trades 24/7 including weekends.</div>
+        <div style="margin-top:3mm;" class="pill pill-o" style="font-size:7pt;">1:5</div>
+      </div>
+      <div class="card cc" style="padding:3.5mm;">
+        <div style="font-size:18pt; margin-bottom:2mm;">📊</div>
+        <div class="c-tag" style="font-size:7pt;">Stocks</div>
+        <div class="c-body" style="font-size:7.5pt; margin-top:1mm;">Apple, Tesla, NVIDIA, Microsoft, Meta and 100+ equities from US, EU and Asian exchanges.</div>
+        <div style="margin-top:3mm;" class="pill" style="font-size:7pt;">1:10</div>
+      </div>
+      <div class="card cs2" style="padding:3.5mm;">
+        <div style="font-size:18pt; margin-bottom:2mm;">🥇</div>
+        <div class="c-tag" style="font-size:7pt;">Commodities</div>
+        <div class="c-body" style="font-size:7.5pt; margin-top:1mm;">Gold, Silver, Platinum, Crude Oil (WTI &amp; Brent), Natural Gas, Wheat, Corn.</div>
+        <div style="margin-top:3mm;" class="pill pill-g" style="font-size:7pt;">1:100</div>
+      </div>
+      <div class="card cp" style="padding:3.5mm;">
+        <div style="font-size:18pt; margin-bottom:2mm;">🌍</div>
+        <div class="c-tag" style="font-size:7pt;">Indices</div>
+        <div class="c-body" style="font-size:7.5pt; margin-top:1mm;">S&amp;P 500, NASDAQ, DAX, FTSE 100, Nikkei 225, NIFTY 50 and more global benchmarks.</div>
+        <div style="margin-top:3mm;" class="pill" style="font-size:7pt;">1:10</div>
+      </div>
+    </div>
+
+    <hr class="rule" />
+
+    <div class="g2" style="gap:5mm;">
+
+      <div>
+        <div class="sub-lbl">Understanding Leverage</div>
+        <div class="card" style="margin-bottom:3mm;">
+          <div class="c-body">
+            Leverage lets you control a larger position with a smaller amount of your own capital.
+            For example, with 1:100 leverage you can open a $10,000 Gold trade using only $100
+            of your own funds. Profits and losses are both magnified, so leverage should always
+            be used with a clear risk plan.
+          </div>
+        </div>
+        <div class="ex-box">
+          <div class="ex-label">Example — Gold at 1:100 Leverage</div>
+          <div class="ex-body">
+            You deposit <strong>$100</strong>. Leverage of 1:100 gives you <strong>$10,000</strong> in market exposure.
+            If Gold rises 1%, your position gains <strong>$100</strong> — a 100% return on your $100.
+            If Gold falls 1%, your position loses $100. This is why Stop Loss orders matter.
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="sub-lbl">Leverage Available by Market</div>
+        <div class="lev">
+          <div class="lev-row">
+            <div class="lev-name">Forex</div>
+            <div class="lev-wrap"><div class="lev-bar" style="width:100%"></div></div>
+            <div class="lev-tag">Up to 1:1000</div>
+          </div>
+          <div class="lev-row">
+            <div class="lev-name">Commodities</div>
+            <div class="lev-wrap"><div class="lev-bar" style="width:10%"></div></div>
+            <div class="lev-tag">Up to 1:100</div>
+          </div>
+          <div class="lev-row">
+            <div class="lev-name">Stocks</div>
+            <div class="lev-wrap"><div class="lev-bar" style="width:1%"></div></div>
+            <div class="lev-tag">Up to 1:10</div>
+          </div>
+          <div class="lev-row">
+            <div class="lev-name">Indices</div>
+            <div class="lev-wrap"><div class="lev-bar" style="width:1%"></div></div>
+            <div class="lev-tag">Up to 1:10</div>
+          </div>
+          <div class="lev-row">
+            <div class="lev-name">Crypto</div>
+            <div class="lev-wrap"><div class="lev-bar" style="width:0.5%"></div></div>
+            <div class="lev-tag">Up to 1:5</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="benefit-strip">
+      <div class="bs-icon">⚠</div>
+      <div>
+        <div class="bs-title">Risk Notice</div>
+        <div class="bs-desc">
+          CFD trading carries significant risk and is not suitable for all investors. Leverage amplifies both gains and losses.
+          Never trade with money you cannot afford to lose. VelozTrade provides Stop Loss and Take Profit tools to help
+          you manage risk on every trade — use them.
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="pf">
+    <span>VelozTrade Client Guide — 2026</span>
+    <span class="pf-a">veloztrade.com</span>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE 4 — HOW TRADING WORKS
+═══════════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="ph">
+    <div class="ph-left">
+      <div class="ph-logo">Veloz<span>Trade</span></div>
+      <div class="ph-div"></div>
+      <div class="ph-sec">How Trading Works</div>
+    </div>
+    <div class="ph-pg">Page 4 of 6</div>
+  </div>
+
+  <div class="pb">
+
+    <div class="sh">
+      <div class="sh-tag">Trading Mechanics</div>
+      <div class="sh-title">How Trading Works on VelozTrade</div>
+      <div class="sh-desc">
+        Every trade on VelozTrade follows the same simple logic: choose a market, decide
+        your direction and size, set your risk limits, and confirm. Here is a breakdown
+        of each step and the tools available to you.
+      </div>
+    </div>
+
+    <!-- Step-by-step trade flow -->
+    <div class="sub-lbl">Placing a Trade — Step by Step</div>
+    <div class="h-flow">
+      <div class="hf-step">
+        <div class="hf-num">Step 1</div>
+        <div class="hf-lbl">Choose a Market</div>
+        <div class="hf-sub">Search or browse your Watchlist</div>
+      </div>
+      <div class="hf-arr">→</div>
+      <div class="hf-step">
+        <div class="hf-num">Step 2</div>
+        <div class="hf-lbl">Pick a Direction</div>
+        <div class="hf-sub">Buy (long) or Sell (short)</div>
+      </div>
+      <div class="hf-arr">→</div>
+      <div class="hf-step">
+        <div class="hf-num">Step 3</div>
+        <div class="hf-lbl">Set Trade Size</div>
+        <div class="hf-sub">Enter lot size or dollar amount</div>
+      </div>
+      <div class="hf-arr">→</div>
+      <div class="hf-step">
+        <div class="hf-num">Step 4</div>
+        <div class="hf-lbl">Add SL &amp; TP</div>
+        <div class="hf-sub">Define your max loss and target</div>
+      </div>
+      <div class="hf-arr">→</div>
+      <div class="hf-step">
+        <div class="hf-num">Step 5</div>
+        <div class="hf-lbl">Confirm Order</div>
+        <div class="hf-sub">Trade opens in your portfolio</div>
+      </div>
+    </div>
+
+    <hr class="rule" />
+
+    <div class="g2">
+      <div>
+        <div class="sub-lbl">Order Types Explained</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Order Type</th>
+              <th>When to Use It</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="td-b">Market Order</td>
+              <td>Enter immediately at the current market price</td>
+            </tr>
+            <tr>
+              <td class="td-b">Buy Limit</td>
+              <td>Buy automatically when price drops to your target level</td>
+            </tr>
+            <tr>
+              <td class="td-b">Sell Limit</td>
+              <td>Sell automatically when price rises to your target level</td>
+            </tr>
+            <tr>
+              <td class="td-b">Buy Stop</td>
+              <td>Buy when price breaks above a resistance level</td>
+            </tr>
+            <tr>
+              <td class="td-b">Sell Stop</td>
+              <td>Sell when price breaks below a support level</td>
+            </tr>
+            <tr>
+              <td class="td-b">Trailing Stop</td>
+              <td>Stop Loss that moves with price to lock in profits</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div>
+        <div class="sub-lbl">Protecting Your Position</div>
+        <div class="steps">
+          <div class="step">
+            <div class="step-n" style="background:rgba(0,196,140,0.15); border-color:var(--success); color:var(--success);">SL</div>
+            <div class="step-body">
+              <div class="step-title">Stop Loss</div>
+              <div class="step-desc">Your trade closes automatically if the market moves against you by a set amount. This limits your maximum loss on every trade. Always recommended.</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-n" style="background:rgba(0,114,255,0.15); border-color:var(--blue); color:var(--blue-light);">TP</div>
+            <div class="step-body">
+              <div class="step-title">Take Profit</div>
+              <div class="step-desc">Your trade closes automatically when it reaches your profit target — locking in gains even if you are not watching the screen.</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-n" style="background:rgba(245,166,35,0.12); border-color:var(--gold); color:var(--gold);">MC</div>
+            <div class="step-body">
+              <div class="step-title">Margin Call &amp; Stop-Out</div>
+              <div class="step-desc">If your account equity drops to 100% of required margin you receive a margin call. Positions close automatically at 50% margin level to protect against negative balances.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ex-box">
+      <div class="ex-label">Real Trade Example — EUR/USD</div>
+      <div class="ex-body">
+        You believe the Euro will strengthen against the Dollar. You open a <strong>Buy (Long)</strong> on EUR/USD
+        at <strong>1.0850</strong> with a lot size of 0.10 using 1:100 leverage. You set a <strong>Stop Loss at 1.0820</strong>
+        (30 pip risk = ~$30 max loss) and a <strong>Take Profit at 1.0910</strong> (60 pip target = ~$60 potential gain).
+        If the market hits your Take Profit, the trade closes automatically with your profit banked.
+      </div>
+    </div>
+
+    <div class="sr">
+      <div class="sb">
+        <div class="sb-val">6</div>
+        <div class="sb-lbl">Order types supported</div>
+      </div>
+      <div class="sb">
+        <div class="sb-val sb-g">Protected</div>
+        <div class="sb-lbl">Negative balance protection for all clients</div>
+      </div>
+      <div class="sb">
+        <div class="sb-val">100%</div>
+        <div class="sb-lbl">Margin call level</div>
+      </div>
+      <div class="sb">
+        <div class="sb-val sb-o">50%</div>
+        <div class="sb-lbl">Stop-out level</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="pf">
+    <span>VelozTrade Client Guide — 2026</span>
+    <span class="pf-a">veloztrade.com</span>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE 5 — ACCOUNTS & GETTING STARTED
+═══════════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="ph">
+    <div class="ph-left">
+      <div class="ph-logo">Veloz<span>Trade</span></div>
+      <div class="ph-div"></div>
+      <div class="ph-sec">Accounts &amp; Getting Started</div>
+    </div>
+    <div class="ph-pg">Page 5 of 6</div>
+  </div>
+
+  <div class="pb">
+
+    <div class="sh">
+      <div class="sh-tag">Account Structure</div>
+      <div class="sh-title">Account Types &amp; Getting Started</div>
+      <div class="sh-desc">
+        Opening a VelozTrade account is free and takes under five minutes. Start with the Demo,
+        move to Live when you are ready, and grow through account tiers as your trading volume increases.
+      </div>
+    </div>
+
+    <!-- How to start -->
+    <div class="sub-lbl">How to Open Your Account</div>
+    <div class="h-flow">
+      <div class="hf-step">
+        <div class="hf-num">Step 1</div>
+        <div class="hf-lbl">Sign Up Free</div>
+        <div class="hf-sub">Email &amp; password — under 2 minutes</div>
+      </div>
+      <div class="hf-arr">→</div>
+      <div class="hf-step">
+        <div class="hf-num">Step 2</div>
+        <div class="hf-lbl">Try the Demo</div>
+        <div class="hf-sub">$10,000 virtual funds, no deposit</div>
+      </div>
+      <div class="hf-arr">→</div>
+      <div class="hf-step">
+        <div class="hf-num">Step 3</div>
+        <div class="hf-lbl">Fund Your Account</div>
+        <div class="hf-sub">Crypto, Bank Wire, or local payment</div>
+      </div>
+      <div class="hf-arr">→</div>
+      <div class="hf-step">
+        <div class="hf-num">Step 4</div>
+        <div class="hf-lbl">Go Live</div>
+        <div class="hf-sub">Switch to real markets with one click</div>
+      </div>
+    </div>
+
+    <!-- Tiers -->
+    <div class="sub-lbl">Live Account Tiers — Pick the Level That Fits You</div>
+    <div class="tiers">
+      <div class="tr-head">
+        <div>Tier</div>
+        <div>Min. Deposit</div>
+        <div>Key Benefits</div>
+        <div>Commission / Lot</div>
+      </div>
+      <div class="tr-row">
+        <div class="tr-name">Standard</div>
+        <div class="td-b">$0</div>
+        <div style="font-size:8.5pt; color:var(--muted);">Full platform access, standard support, all markets</div>
+        <div style="font-size:8.5pt;">$2.00</div>
+      </div>
+      <div class="tr-row" style="border-color:rgba(124,163,204,0.3);">
+        <div class="tr-name" style="color:var(--muted);">Silver</div>
+        <div class="td-b">$250</div>
+        <div style="font-size:8.5pt; color:var(--muted);">Priority support, faster withdrawal processing</div>
+        <div style="font-size:8.5pt;">$1.50</div>
+      </div>
+      <div class="tr-row" style="border-color:rgba(245,166,35,0.35);">
+        <div class="tr-name td-o">Gold</div>
+        <div class="td-b">$2,500</div>
+        <div style="font-size:8.5pt; color:var(--muted);">Dedicated account manager, 1-day withdrawal SLA</div>
+        <div style="font-size:8.5pt;">$1.00</div>
+      </div>
+      <div class="tr-row" style="border-color:rgba(200,200,220,0.35);">
+        <div class="tr-name" style="color:#C8C8DC;">Platinum</div>
+        <div class="td-b">$10,000</div>
+        <div style="font-size:8.5pt; color:var(--muted);">VIP desk access, under 4-hour withdrawal SLA</div>
+        <div style="font-size:8.5pt;">$0.50</div>
+      </div>
+      <div class="tr-row" style="border-color:rgba(0,196,140,0.4); background:rgba(0,196,140,0.05);">
+        <div class="tr-name td-g">VIP</div>
+        <div class="td-b">$50,000</div>
+        <div style="font-size:8.5pt; color:var(--muted);">Zero commission, &lt;1h withdrawals, personal analyst</div>
+        <div class="td-g">$0.00</div>
+      </div>
+    </div>
+
+    <hr class="rule" />
+
+    <!-- Deposit methods -->
+    <div class="sub-lbl">Deposit &amp; Withdrawal Methods</div>
+    <div class="g3">
+      <div class="card ca" style="padding:3.5mm;">
+        <div class="c-icon">₿</div>
+        <div class="c-tag" style="font-size:7pt;">Cryptocurrency</div>
+        <div class="c-title" style="font-size:9pt;">Bitcoin, Ethereum &amp; USDT</div>
+        <div class="c-body" style="font-size:8pt;">Deposits are detected automatically on BNB Chain and Polygon. No manual process — funds appear in your account once confirmed on-chain.</div>
+      </div>
+      <div class="card cc" style="padding:3.5mm;">
+        <div class="c-icon">🏦</div>
+        <div class="c-tag" style="font-size:7pt;">Bank Transfer</div>
+        <div class="c-title" style="font-size:9pt;">SWIFT &amp; SEPA Wire</div>
+        <div class="c-body" style="font-size:8pt;">Suitable for larger deposits. International wire transfers processed within 1–3 business days depending on your bank.</div>
+      </div>
+      <div class="card" style="padding:3.5mm; border-top:2px solid var(--success);">
+        <div class="c-icon">💳</div>
+        <div class="c-tag" style="font-size:7pt;">Local Payments</div>
+        <div class="c-title" style="font-size:9pt;">Easypaisa, JazzCash &amp; UPI</div>
+        <div class="c-body" style="font-size:8pt;">Localised payment options for clients in Pakistan (Easypaisa / JazzCash) and India (UPI) for fast, low-friction deposits.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="pf">
+    <span>VelozTrade Client Guide — 2026</span>
+    <span class="pf-a">veloztrade.com</span>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE 6 — TOOLS, SOCIAL & WHY VELOZTRADE
+═══════════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="ph">
+    <div class="ph-left">
+      <div class="ph-logo">Veloz<span>Trade</span></div>
+      <div class="ph-div"></div>
+      <div class="ph-sec">Platform Tools &amp; Why VelozTrade</div>
+    </div>
+    <div class="ph-pg">Page 6 of 6</div>
+  </div>
+
+  <div class="pb">
+
+    <div class="sh">
+      <div class="sh-tag">Features</div>
+      <div class="sh-title">Tools Built to Help You Trade Better</div>
+      <div class="sh-desc">
+        VelozTrade goes beyond a basic order form. Every account comes with professional charting,
+        automated copy-trading, AI-generated signals, a social community, and tools to help you
+        learn and grow as a trader.
+      </div>
+    </div>
+
+    <div class="g2">
+      <div class="card ca">
+        <div class="c-icon">📉</div>
+        <div class="c-tag">Professional Charts</div>
+        <div class="c-title">Chart Any Market with Full Technical Tools</div>
+        <div class="c-body" style="margin-bottom:2mm;">
+          Interactive candlestick charts with multiple timeframes (1 minute to 1 day).
+          Draw trendlines and horizontal levels, and overlay built-in indicators
+          — RSI, MACD, and Bollinger Bands — to support your analysis.
+        </div>
+        <div class="pills">
+          <div class="pill">RSI &amp; MACD</div>
+          <div class="pill">Bollinger Bands</div>
+          <div class="pill">Trendlines</div>
+        </div>
+      </div>
+
+      <div class="card cg">
+        <div class="c-icon">🤝</div>
+        <div class="c-tag">AutoCopy</div>
+        <div class="c-title">Follow &amp; Copy Profitable Traders</div>
+        <div class="c-body" style="margin-bottom:2mm;">
+          Browse the leaderboard and choose traders with a track record that suits
+          your risk appetite. Once you subscribe, their trades are mirrored in
+          your account automatically. Set a max loss limit at any time.
+        </div>
+        <div class="pills">
+          <div class="pill pill-o">Copy Amount Control</div>
+          <div class="pill pill-o">Max Loss Stop</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="g3">
+      <div class="card cc" style="padding:4mm;">
+        <div class="c-icon" style="font-size:13pt;">🤖</div>
+        <div class="c-tag" style="font-size:7pt;">AI Signals</div>
+        <div class="c-title" style="font-size:9.5pt;">Trade Ideas Every 30 Seconds</div>
+        <div class="c-body" style="font-size:8pt;">The signals engine scans all instruments using technical indicators and surfaces buy/sell ideas with confidence scores, entry points, Stop Loss and Take Profit levels.</div>
+      </div>
+      <div class="card" style="padding:4mm;">
+        <div class="c-icon" style="font-size:13pt;">💬</div>
+        <div class="c-tag" style="font-size:7pt;">Social Feed</div>
+        <div class="c-title" style="font-size:9.5pt;">Share Ideas with the Community</div>
+        <div class="c-body" style="font-size:8pt;">Post trade ideas with your entry, SL and TP. Browse what other traders are doing. A live news feed with sentiment tags (bullish/bearish) keeps you informed.</div>
+      </div>
+      <div class="card" style="padding:4mm;">
+        <div class="c-icon" style="font-size:13pt;">🏆</div>
+        <div class="c-tag" style="font-size:7pt;">Leaderboard &amp; Contests</div>
+        <div class="c-title" style="font-size:9.5pt;">Compete &amp; Improve</div>
+        <div class="c-body" style="font-size:8pt;">See who the top traders are by profit percentage. Join time-limited trading contests to test your skills against the community and win platform rewards.</div>
+      </div>
+    </div>
+
+    <div class="g3">
+      <div class="card" style="padding:4mm;">
+        <div class="c-icon" style="font-size:13pt;">📅</div>
+        <div class="c-tag" style="font-size:7pt;">Economic Calendar</div>
+        <div class="c-title" style="font-size:9.5pt;">Never Miss a Market Event</div>
+        <div class="c-body" style="font-size:8pt;">Track high-impact events — NFP, CPI, interest rate decisions and earnings — so you know when to expect big price moves and can plan accordingly.</div>
+      </div>
+      <div class="card" style="padding:4mm;">
+        <div class="c-icon" style="font-size:13pt;">📓</div>
+        <div class="c-tag" style="font-size:7pt;">Trade Journal</div>
+        <div class="c-title" style="font-size:9.5pt;">Review Every Trade You Take</div>
+        <div class="c-body" style="font-size:8pt;">Your full trade history is stored with P&amp;L, open/close times, and an equity curve. Add personal notes and strategy tags to learn from every trade.</div>
+      </div>
+      <div class="card" style="padding:4mm;">
+        <div class="c-icon" style="font-size:13pt;">🎓</div>
+        <div class="c-tag" style="font-size:7pt;">Academy &amp; Support</div>
+        <div class="c-title" style="font-size:9.5pt;">Learn at Your Own Pace</div>
+        <div class="c-body" style="font-size:8pt;">Educational resources cover trading fundamentals, risk management and platform navigation. Live support is available for all account tiers.</div>
+      </div>
+    </div>
+
+    <div class="benefit-strip" style="margin-top:1mm;">
+      <div class="bs-icon">🚀</div>
+      <div>
+        <div class="bs-title">Ready to Start? Open Your Free Account Today</div>
+        <div class="bs-desc">
+          Sign up at <strong style="color:var(--blue-light);">veloztrade.com</strong> — no deposit required. Start with a $10,000 demo, explore every market and feature,
+          and go live only when you feel confident. Your account manager is available from Silver tier onwards
+          to guide your journey from day one.
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="pf">
+    <span>VelozTrade Client Guide — 2026 &copy; VelozTrade. For informational purposes only. Trading involves risk.</span>
+    <span class="pf-a">veloztrade.com</span>
+  </div>
+</div>
+
+</body>
+</html>

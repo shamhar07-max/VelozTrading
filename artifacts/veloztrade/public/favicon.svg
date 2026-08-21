@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#040C1A"/>
+      <stop offset="100%" stop-color="#061828"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="16" y1="76" x2="84" y2="20" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00C6FF"/>
+      <stop offset="60%" stop-color="#0072FF"/>
+      <stop offset="100%" stop-color="#7C3AED"/>
+    </linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="100" height="100" rx="20" fill="url(#bg)"/>
+  <line x1="16" y1="24" x2="50" y2="76" stroke="url(#mark)" stroke-width="9" stroke-linecap="round" filter="url(#glow)"/>
+  <polyline points="50,76 62,49 71,61 84,20" stroke="url(#mark)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none" filter="url(#glow)"/>
+  <circle cx="84" cy="20" r="6" fill="#00C6FF" filter="url(#glow)"/>
+  <circle cx="84" cy="20" r="2.8" fill="white"/>
+</svg>

@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VelozPartner Program — Official Partner Guide</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue:       #0072FF;
+      --blue-light: #3D9BFF;
+      --cyan:       #00D4FF;
+      --navy:       #020B18;
+      --navy-mid:   #071428;
+      --navy-card:  #0D2240;
+      --border:     #1A3A6B;
+      --text:       #E8F4FF;
+      --muted:      #7CA3CC;
+      --success:    #00C48C;
+      --gold:       #F5A623;
+      --purple:     #8B5CF6;
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: #111827;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 0;
+      gap: 0;
+    }
+
+    /* ── A4 page ─────────────────────────────── */
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      background: var(--navy);
+      color: var(--text);
+      position: relative;
+      overflow: hidden;
+      page-break-after: always;
+      break-after: page;
+    }
+
+    @page { size: A4; margin: 0; }
+    @media print {
+      body { background: none; padding: 0; }
+      .page { page-break-after: always; break-after: page; box-shadow: none; }
+      .no-print { display: none !important; }
+    }
+
+    /* ── Decorative elements ─────────────────── */
+    .glow-circle {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(90px);
+      pointer-events: none;
+    }
+
+    /* ── Typography ──────────────────────────── */
+    .label {
+      font-size: 8.5pt;
+      font-weight: 700;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: var(--cyan);
+    }
+
+    .section-title {
+      font-size: 20pt;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1.2;
+    }
+
+    .body-text {
+      font-size: 9.5pt;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    /* ── Cards ───────────────────────────────── */
+    .card {
+      background: var(--navy-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+
+    .card-sm {
+      background: rgba(13,34,64,0.7);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+
+    /* ── Divider ─────────────────────────────── */
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border) 20%, var(--border) 80%, transparent);
+      margin: 20px 0;
+    }
+
+    /* ── Badge ───────────────────────────────── */
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 99px;
+      font-size: 7.5pt;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .badge-blue   { background: rgba(0,114,255,0.15); color: #60AEFF; border: 1px solid rgba(0,114,255,0.3); }
+    .badge-cyan   { background: rgba(0,212,255,0.12); color: #00D4FF; border: 1px solid rgba(0,212,255,0.3); }
+    .badge-gold   { background: rgba(245,166,35,0.12); color: var(--gold); border: 1px solid rgba(245,166,35,0.3); }
+    .badge-green  { background: rgba(0,196,140,0.12); color: var(--success); border: 1px solid rgba(0,196,140,0.3); }
+    .badge-purple { background: rgba(139,92,246,0.12); color: #A78BFA; border: 1px solid rgba(139,92,246,0.3); }
+
+    /* ── Pill row ────────────────────────────── */
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    /* ── Stats grid ──────────────────────────── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .stat-box {
+      background: rgba(13,34,64,0.8);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      text-align: center;
+    }
+    .stat-box .val {
+      font-size: 18pt;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--blue-light), var(--cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .stat-box .val-gold {
+      font-size: 18pt;
+      font-weight: 800;
+      background: linear-gradient(135deg, #F5A623, #FFD700);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .stat-box .cap {
+      font-size: 7.5pt;
+      color: var(--muted);
+      margin-top: 3px;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Milestone track ─────────────────────── */
+    .milestone-track {
+      display: flex;
+      align-items: flex-start;
+      gap: 0;
+      margin: 16px 0;
+      position: relative;
+    }
+    .milestone-track::before {
+      content: '';
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      right: 20px;
+      height: 2px;
+      background: var(--border);
+      z-index: 0;
+    }
+    .milestone-step {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      position: relative;
+      z-index: 1;
+    }
+    .milestone-dot {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9pt;
+      font-weight: 800;
+    }
+    .milestone-label {
+      text-align: center;
+      font-size: 8pt;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .milestone-label strong {
+      display: block;
+      color: var(--text);
+      font-size: 9pt;
+      font-weight: 700;
+    }
+
+    /* ── Commission stream ───────────────────── */
+    .stream-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 14px 0;
+      border-bottom: 1px solid rgba(26,58,107,0.5);
+    }
+    .stream-row:last-child { border-bottom: none; }
+    .stream-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 16pt;
+    }
+    .stream-body { flex: 1; }
+    .stream-body h4 {
+      font-size: 10.5pt;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 3px;
+    }
+    .stream-body p {
+      font-size: 8.5pt;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .stream-rate {
+      text-align: right;
+      flex-shrink: 0;
+    }
+    .stream-rate .rate-val {
+      font-size: 14pt;
+      font-weight: 800;
+      color: var(--success);
+    }
+    .stream-rate .rate-sub {
+      font-size: 7.5pt;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    /* ── Table ───────────────────────────────── */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 8.5pt;
+    }
+    .data-table thead tr {
+      background: rgba(0,114,255,0.06);
+    }
+    .data-table th {
+      text-align: left;
+      padding: 8px 12px;
+      font-size: 7.5pt;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .data-table td {
+      padding: 9px 12px;
+      border-bottom: 1px solid rgba(26,58,107,0.35);
+      color: var(--text);
+      vertical-align: middle;
+    }
+    .data-table tbody tr:last-child td { border-bottom: none; }
+    .data-table .check { color: var(--success); font-size: 11pt; font-weight: 700; }
+    .data-table .dash  { color: var(--muted); }
+    .data-table .highlight-row td { background: rgba(0,114,255,0.05); }
+
+    /* ── Step flow ───────────────────────────── */
+    .step-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .step-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .step-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--blue), var(--blue-light));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9pt;
+      font-weight: 800;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .step-content h4 {
+      font-size: 10pt;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+    .step-content p {
+      font-size: 8.5pt;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* ── FAQ ─────────────────────────────────── */
+    .faq-item {
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(26,58,107,0.4);
+    }
+    .faq-item:last-child { border-bottom: none; }
+    .faq-item h4 {
+      font-size: 9.5pt;
+      font-weight: 700;
+      color: var(--blue-light);
+      margin-bottom: 4px;
+    }
+    .faq-item p {
+      font-size: 8.5pt;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    /* ── Footer ──────────────────────────────── */
+    .page-footer {
+      position: absolute;
+      bottom: 18px;
+      left: 32px;
+      right: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 7pt;
+      color: rgba(124,163,204,0.45);
+      border-top: 1px solid rgba(26,58,107,0.35);
+      padding-top: 10px;
+    }
+
+    /* ── Inline highlight box ────────────────── */
+    .info-box {
+      background: rgba(0,114,255,0.07);
+      border: 1px solid rgba(0,114,255,0.25);
+      border-left: 3px solid var(--blue);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 8.5pt;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .info-box.gold {
+      background: rgba(245,166,35,0.06);
+      border-color: rgba(245,166,35,0.2);
+      border-left-color: var(--gold);
+    }
+    .info-box strong { color: var(--text); }
+
+    /* ── Two-col layout ─────────────────────── */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .three-col {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    /* ── Feature bullet ─────────────────────── */
+    .feature-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+    .feature-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 8.5pt;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .feature-list li::before {
+      content: '✦';
+      color: var(--cyan);
+      font-size: 7pt;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+    .feature-list li strong { color: var(--text); }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PAGE 1 — COVER
+═══════════════════════════════════════════════════════════════ -->
+<div class="page" style="display:flex; flex-direction:column; justify-content:space-between; padding:0;">
+
+  <!-- Background glows -->
+  <div class="glow-circle" style="width:500px;height:500px;background:rgba(0,114,255,0.12);top:-120px;left:-120px;"></div>
+  <div class="glow-circle" style="width:350px;height:350px;background:rgba(0,212,255,0.07);bottom:80px;right:-80px;"></div>
+
+  <!-- Header bar -->
+  <div style="background:rgba(7,20,40,0.9);border-bottom:1px solid var(--border);padding:18px 36px;display:flex;align-items:center;justify-content:space-between;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,#0072FF,#00D4FF);display:flex;align-items:center;justify-content:center;">
+        <span style="font-size:16pt;font-weight:900;color:#fff;line-height:1;">V</span>
+      </div>
+      <span style="font-size:15pt;font-weight:800;letter-spacing:-0.5px;color:var(--text);">Veloz<span style="color:var(--cyan);">Trade</span></span>
+    </div>
+    <div class="badge badge-gold" style="font-size:8pt;padding:5px 14px;">Partner Program</div>
+  </div>
+
+  <!-- Hero content -->
+  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:48px 52px 24px;">
+
+    <div class="label" style="margin-bottom:14px;">Introducing</div>
+
+    <h1 style="font-size:46pt;font-weight:900;line-height:1.05;letter-spacing:-2px;margin-bottom:10px;">
+      <span style="background:linear-gradient(135deg,#E8F4FF 0%,#3D9BFF 60%,#00D4FF 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">Veloz</span><span style="color:var(--gold);">Partner</span>
+    </h1>
+    <h2 style="font-size:17pt;font-weight:600;color:var(--muted);letter-spacing:-0.3px;margin-bottom:28px;">Earn. Grow. Unlock Capital.</h2>
+
+    <p style="font-size:11pt;color:var(--muted);line-height:1.7;max-width:400px;margin-bottom:36px;">
+      Join the VelozTrade partner ecosystem and build a passive income stream by referring new traders. Earn CPA bonuses, lifetime revenue share, and unlock seeded trading capital as your network grows.
+    </p>
+
+    <!-- Quick stats -->
+    <div style="display:flex;gap:28px;margin-bottom:36px;">
+      <div>
+        <div style="font-size:26pt;font-weight:900;background:linear-gradient(135deg,var(--blue-light),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">Up to $500</div>
+        <div style="font-size:8.5pt;color:var(--muted);margin-top:2px;">CPA per depositing referral</div>
+      </div>
+      <div style="width:1px;background:var(--border);"></div>
+      <div>
+        <div style="font-size:26pt;font-weight:900;background:linear-gradient(135deg,var(--gold),#FFD700);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">20%</div>
+        <div style="font-size:8.5pt;color:var(--muted);margin-top:2px;">Revenue share on trades</div>
+      </div>
+      <div style="width:1px;background:var(--border);"></div>
+      <div>
+        <div style="font-size:26pt;font-weight:900;background:linear-gradient(135deg,var(--success),#00FFAA);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">$100K</div>
+        <div style="font-size:8.5pt;color:var(--muted);margin-top:2px;">Seeded capital at top milestone</div>
+      </div>
+    </div>
+
+    <!-- Tag line badges -->
+    <div class="pill-row">
+      <span class="badge badge-blue">Lifetime Commissions</span>
+      <span class="badge badge-cyan">Seeded Capital</span>
+      <span class="badge badge-green">Real-time Earnings</span>
+      <span class="badge badge-gold">Dedicated Dashboard</span>
+      <span class="badge badge-purple">Email Alerts</span>
+    </div>
+  </div>
+
+  <!-- Bottom gradient bar -->
+  <div style="height:6px;background:linear-gradient(90deg,var(--blue) 0%,var(--cyan) 50%,var(--blue) 100%);"></div>
+
+  <div class="page-footer">
+    <span>VelozTrade — Confidential Partner Document</span>
+    <span>veloztrade.com</span>
+    <span>Page 1 of 5</span>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PAGE 2 — HOW IT WORKS + COMMISSION STREAMS
+═══════════════════════════════════════════════════════════════ -->
+<div class="page" style="padding:40px 36px 52px;">
+
+  <div class="glow-circle" style="width:320px;height:320px;background:rgba(0,212,255,0.05);top:-60px;right:-60px;"></div>
+
+  <!-- Section header -->
+  <div class="label" style="margin-bottom:6px;">Program Structure</div>
+  <h2 class="section-title" style="margin-bottom:6px;">How VelozPartner Works</h2>
+  <p class="body-text" style="margin-bottom:22px;max-width:520px;">Once approved as a VelozPartner, you receive a unique referral link and QR code. Every trader who signs up through your link is permanently linked to your account — there are no expiry windows or cookie cutoffs.</p>
+
+  <!-- Steps -->
+  <div class="step-list" style="margin-bottom:28px;">
+    <div class="step-item">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <h4>Apply &amp; Get Approved</h4>
+        <p>Submit a partner application via the VelozTrade portal. Our team reviews applications within 48 hours. Once approved, your partner account is created and seeded with starting capital based on your agreement.</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <h4>Share Your Unique Referral Link</h4>
+        <p>You receive a custom referral code (e.g. <code style="background:rgba(0,114,255,0.1);padding:1px 6px;border-radius:4px;font-size:8pt;color:var(--blue-light);">VT-partner123</code>) embedded in your referral URL and a QR code you can use on print, social, or video content. Share it anywhere.</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <h4>Referrals Sign Up &amp; Deposit</h4>
+        <p>When a user clicks your link and registers, they are permanently tied to your account. You receive an email notification immediately. When they make their first qualifying deposit (≥ $250), your CPA bonus is credited automatically.</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <h4>Earn Across Three Streams</h4>
+        <p>Commissions accumulate in real time across CPA bonuses, revenue share on every trade your referrals place, and profits from your own seeded trading capital. All earnings are visible in your Partner Portal dashboard.</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">5</div>
+      <div class="step-content">
+        <h4>Withdraw Earnings Anytime</h4>
+        <p>Your commission wallet balance is withdrawable at any time via Bank Wire, Crypto, E-Wallet, JazzCash, Easypaisa, or UPI — directly from your Partner Portal without needing to visit the main Withdraw page.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Commission streams -->
+  <div class="label" style="margin-bottom:10px;">Three Earning Streams</div>
+
+  <div class="card">
+    <div class="stream-row">
+      <div class="stream-icon" style="background:rgba(0,196,140,0.12);border:1px solid rgba(0,196,140,0.25);">💰</div>
+      <div class="stream-body">
+        <h4>CPA Bonus <span class="badge badge-green" style="margin-left:6px;vertical-align:middle;">One-Time Per Referral</span></h4>
+        <p>A fixed Cost-Per-Acquisition bonus paid when a referred user makes their first qualifying deposit of $250 or more. The CPA rate is agreed at onboarding and is visible on your Partner Portal stats card.</p>
+      </div>
+      <div class="stream-rate">
+        <div class="rate-val">$250–$500</div>
+        <div class="rate-sub">per depositing referral</div>
+      </div>
+    </div>
+    <div class="stream-row">
+      <div class="stream-icon" style="background:rgba(0,114,255,0.12);border:1px solid rgba(0,114,255,0.25);">📈</div>
+      <div class="stream-body">
+        <h4>Revenue Share <span class="badge badge-blue" style="margin-left:6px;vertical-align:middle;">Lifetime</span></h4>
+        <p>A percentage of the platform's revenue generated from every trade your referrals execute — for the lifetime of their account. This is the compounding, passive income layer of the program that grows with your network.</p>
+      </div>
+      <div class="stream-rate">
+        <div class="rate-val">Up to 20%</div>
+        <div class="rate-sub">of platform revenue per trade</div>
+      </div>
+    </div>
+    <div class="stream-row">
+      <div class="stream-icon" style="background:rgba(245,166,35,0.12);border:1px solid rgba(245,166,35,0.25);">🏦</div>
+      <div class="stream-body">
+        <h4>Seeded Capital Profits <span class="badge badge-gold" style="margin-left:6px;vertical-align:middle;">Milestone Unlocked</span></h4>
+        <p>As you hit network milestones, you unlock access to increasing portions of your seeded trading capital. All profits generated by trading this capital flow into your commission wallet and are fully withdrawable.</p>
+      </div>
+      <div class="stream-rate">
+        <div class="rate-val">100%</div>
+        <div class="rate-sub">of trading profits kept</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-footer">
+    <span>VelozTrade — Confidential Partner Document</span>
+    <span>veloztrade.com</span>
+    <span>Page 2 of 5</span>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PAGE 3 — CAPITAL UNLOCK MILESTONES + TIERS
+═══════════════════════════════════════════════════════════════ -->
+<div class="page" style="padding:40px 36px 52px;">
+
+  <div class="glow-circle" style="width:280px;height:280px;background:rgba(245,166,35,0.06);bottom:100px;left:-60px;"></div>
+
+  <div class="label" style="margin-bottom:6px;">Milestone Tracker</div>
+  <h2 class="section-title" style="margin-bottom:8px;">Capital Unlock Milestones</h2>
+  <p class="body-text" style="margin-bottom:24px;max-width:520px;">Your seeded capital is unlocked progressively as your referral network grows. Each milestone is measured by the number of <strong style="color:var(--text);">depositing referrals</strong> — users who have made at least one qualifying deposit of $250 or more.</p>
+
+  <!-- Milestone track -->
+  <div class="milestone-track" style="margin-bottom:28px;">
+    <div class="milestone-step">
+      <div class="milestone-dot" style="background:rgba(0,114,255,0.15);border:2px solid var(--blue);color:var(--blue-light);">10</div>
+      <div class="milestone-label">
+        <strong>Stage 1</strong>
+        10 depositors<br/>
+        <span style="color:var(--success);font-weight:700;">25% unlocked</span>
+      </div>
+    </div>
+    <div class="milestone-step">
+      <div class="milestone-dot" style="background:rgba(0,212,255,0.15);border:2px solid var(--cyan);color:var(--cyan);">25</div>
+      <div class="milestone-label">
+        <strong>Stage 2</strong>
+        25 depositors<br/>
+        <span style="color:var(--success);font-weight:700;">50% unlocked</span>
+      </div>
+    </div>
+    <div class="milestone-step">
+      <div class="milestone-dot" style="background:rgba(245,166,35,0.15);border:2px solid var(--gold);color:var(--gold);">50</div>
+      <div class="milestone-label">
+        <strong>Stage 3</strong>
+        50 depositors<br/>
+        <span style="color:var(--success);font-weight:700;">75% unlocked</span>
+      </div>
+    </div>
+    <div class="milestone-step">
+      <div class="milestone-dot" style="background:rgba(0,196,140,0.15);border:2px solid var(--success);color:var(--success);">100</div>
+      <div class="milestone-label">
+        <strong>Stage 4</strong>
+        100 depositors<br/>
+        <span style="color:var(--success);font-weight:700;">100% unlocked</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Capital unlock illustration table -->
+  <div class="card" style="margin-bottom:22px;">
+    <div style="font-size:9pt;font-weight:700;color:var(--text);margin-bottom:12px;">Example: Partner with $100,000 Seeded Capital</div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Stage</th>
+          <th>Depositing Referrals Needed</th>
+          <th>% Capital Unlocked</th>
+          <th>Withdrawable Capital</th>
+          <th>Locked Capital</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="badge badge-blue">Stage 0</span></td>
+          <td>0 (starting)</td>
+          <td>0%</td>
+          <td style="color:var(--muted);">$0</td>
+          <td>$100,000</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-blue">Stage 1</span></td>
+          <td>10</td>
+          <td style="color:var(--success);font-weight:700;">25%</td>
+          <td style="color:var(--success);font-weight:600;">$25,000</td>
+          <td>$75,000</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-cyan">Stage 2</span></td>
+          <td>25</td>
+          <td style="color:var(--success);font-weight:700;">50%</td>
+          <td style="color:var(--success);font-weight:600;">$50,000</td>
+          <td>$50,000</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-gold">Stage 3</span></td>
+          <td>50</td>
+          <td style="color:var(--success);font-weight:700;">75%</td>
+          <td style="color:var(--success);font-weight:600;">$75,000</td>
+          <td>$25,000</td>
+        </tr>
+        <tr class="highlight-row">
+          <td><span class="badge badge-green">Stage 4 ★</span></td>
+          <td>100</td>
+          <td style="color:var(--gold);font-weight:800;">100%</td>
+          <td style="color:var(--gold);font-weight:700;">$100,000</td>
+          <td style="color:var(--muted);">$0</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="info-box gold" style="margin-bottom:22px;">
+    <strong>Important:</strong> Seeded capital profits are always 100% yours from day one — only the <em>principal</em> seeded capital is subject to the milestone unlock schedule. Profits generated by trading the unlocked portion are credited to your commission wallet and withdrawable immediately.
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Partner tier comparison -->
+  <div class="label" style="margin-bottom:10px;">Earnings Potential</div>
+  <div class="stats-grid">
+    <div class="stat-box">
+      <div class="val">$2,500</div>
+      <div class="cap">10 depositing referrals<br/>@ $250 CPA each</div>
+    </div>
+    <div class="stat-box">
+      <div class="val">$12,500</div>
+      <div class="cap">50 depositing referrals<br/>@ $250 CPA each</div>
+    </div>
+    <div class="stat-box">
+      <div class="val-gold">$50,000+</div>
+      <div class="cap">100 referrals + rev share<br/>+ seeded capital profits</div>
+    </div>
+  </div>
+
+  <div class="page-footer">
+    <span>VelozTrade — Confidential Partner Document</span>
+    <span>veloztrade.com</span>
+    <span>Page 3 of 5</span>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PAGE 4 — PARTNER PORTAL + COMPARISON TABLE
+═══════════════════════════════════════════════════════════════ -->
+<div class="page" style="padding:40px 36px 52px;">
+
+  <div class="glow-circle" style="width:260px;height:260px;background:rgba(139,92,246,0.06);top:-60px;right:-40px;"></div>
+
+  <div class="label" style="margin-bottom:6px;">Partner Dashboard</div>
+  <h2 class="section-title" style="margin-bottom:8px;">Your Partner Portal</h2>
+  <p class="body-text" style="margin-bottom:20px;max-width:520px;">Every VelozPartner gets access to a dedicated dashboard at <strong style="color:var(--text);">veloztrade.com/partner</strong> — giving you real-time visibility into your network and earnings.</p>
+
+  <div class="two-col" style="margin-bottom:22px;">
+    <div class="card">
+      <div style="font-size:9pt;font-weight:700;color:var(--text);margin-bottom:10px;">📊 Stats at a Glance</div>
+      <ul class="feature-list">
+        <li><strong>Total Referrals</strong> — all users who signed up via your link</li>
+        <li><strong>Depositing Referrals</strong> — users who have made ≥ $250 deposit</li>
+        <li><strong>Commission Earned</strong> — lifetime total across all streams</li>
+        <li><strong>Withdrawable Balance</strong> — your available commission wallet</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div style="font-size:9pt;font-weight:700;color:var(--text);margin-bottom:10px;">🔗 Referral Tools</div>
+      <ul class="feature-list">
+        <li><strong>Unique referral link</strong> with one-click copy</li>
+        <li><strong>QR code</strong> — printable for offline marketing</li>
+        <li>Share to <strong>WhatsApp, Telegram, Email</strong> in one tap</li>
+        <li>Real-time referral count badge</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div style="font-size:9pt;font-weight:700;color:var(--text);margin-bottom:10px;">🏦 Milestone Tracker</div>
+      <ul class="feature-list">
+        <li>Visual progress bar toward next capital unlock</li>
+        <li>Depositors count vs. next milestone target</li>
+        <li>Capital unlocked % and withdrawable principal</li>
+        <li>Next milestone preview with referrals remaining</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div style="font-size:9pt;font-weight:700;color:var(--text);margin-bottom:10px;">💳 Earnings Breakdown</div>
+      <ul class="feature-list">
+        <li>Separate tabs for CPA, Rev Share, Trading profits</li>
+        <li>Recent event list per earning stream</li>
+        <li>Commission History table — sortable by amount/date</li>
+        <li>Masked referred-user column for privacy</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Withdrawal methods -->
+  <div class="label" style="margin-bottom:10px;">Withdrawal Methods</div>
+  <div class="card" style="margin-bottom:22px;">
+    <div class="three-col">
+      <div class="card-sm" style="text-align:center;">
+        <div style="font-size:16pt;margin-bottom:4px;">🏦</div>
+        <div style="font-size:8.5pt;font-weight:700;color:var(--text);">Bank Wire</div>
+        <div style="font-size:7.5pt;color:var(--muted);margin-top:2px;">International transfer</div>
+      </div>
+      <div class="card-sm" style="text-align:center;">
+        <div style="font-size:16pt;margin-bottom:4px;">₿</div>
+        <div style="font-size:8.5pt;font-weight:700;color:var(--text);">Crypto</div>
+        <div style="font-size:7.5pt;color:var(--muted);margin-top:2px;">BTC, ETH, USDT</div>
+      </div>
+      <div class="card-sm" style="text-align:center;">
+        <div style="font-size:16pt;margin-bottom:4px;">💳</div>
+        <div style="font-size:8.5pt;font-weight:700;color:var(--text);">E-Wallet</div>
+        <div style="font-size:7.5pt;color:var(--muted);margin-top:2px;">Skrill, Neteller</div>
+      </div>
+      <div class="card-sm" style="text-align:center;">
+        <div style="font-size:16pt;margin-bottom:4px;">📱</div>
+        <div style="font-size:8.5pt;font-weight:700;color:var(--text);">JazzCash</div>
+        <div style="font-size:7.5pt;color:var(--muted);margin-top:2px;">Pakistan mobile</div>
+      </div>
+      <div class="card-sm" style="text-align:center;">
+        <div style="font-size:16pt;margin-bottom:4px;">📲</div>
+        <div style="font-size:8.5pt;font-weight:700;color:var(--text);">Easypaisa</div>
+        <div style="font-size:7.5pt;color:var(--muted);margin-top:2px;">Pakistan mobile</div>
+      </div>
+      <div class="card-sm" style="text-align:center;">
+        <div style="font-size:16pt;margin-bottom:4px;">🇮🇳</div>
+        <div style="font-size:8.5pt;font-weight:700;color:var(--text);">UPI</div>
+        <div style="font-size:7.5pt;color:var(--muted);margin-top:2px;">India payments</div>
+      </div>
+    </div>
+    <p style="font-size:7.5pt;color:var(--muted);margin-top:12px;">Minimum withdrawal: <strong style="color:var(--text);">$10</strong> · Withdrawals processed within 1–3 business days · No withdrawal fees charged by VelozTrade</p>
+  </div>
+
+  <!-- Email notifications -->
+  <div class="label" style="margin-bottom:10px;">Email Notifications</div>
+  <div class="info-box" style="margin-bottom:0;">
+    Partners receive automatic email alerts for key events:
+    <br/><br/>
+    <strong>• New Sign-Up Alert</strong> — sent immediately when someone registers via your link, including the new user's email, total referral count, and a reminder that their CPA bonus is pending first deposit.
+    <br/>
+    <strong>• CPA Earned Alert</strong> — sent when a referral makes a qualifying deposit (≥ $250), showing the bonus amount, the depositing user's email, and your updated depositing referral count.
+  </div>
+
+  <div class="page-footer">
+    <span>VelozTrade — Confidential Partner Document</span>
+    <span>veloztrade.com</span>
+    <span>Page 4 of 5</span>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PAGE 5 — FAQ + TERMS + CONTACT
+═══════════════════════════════════════════════════════════════ -->
+<div class="page" style="padding:40px 36px 52px;">
+
+  <div class="glow-circle" style="width:300px;height:300px;background:rgba(0,196,140,0.05);bottom:-60px;right:-60px;"></div>
+
+  <div class="two-col" style="gap:24px;">
+
+    <!-- FAQ column -->
+    <div>
+      <div class="label" style="margin-bottom:6px;">FAQ</div>
+      <h2 class="section-title" style="font-size:16pt;margin-bottom:14px;">Common Questions</h2>
+
+      <div class="faq-item">
+        <h4>Who can apply to become a VelozPartner?</h4>
+        <p>Any individual or entity with an existing network of traders — content creators, trading educators, signal providers, introducing brokers — are welcome to apply. Accounts must be KYC-verified to receive commissions.</p>
+      </div>
+      <div class="faq-item">
+        <h4>Is there a minimum number of referrals to get started?</h4>
+        <p>No minimum is required to earn CPA or revenue share. Capital unlock milestones start at 10 depositing referrals for Stage 1 (25% unlock).</p>
+      </div>
+      <div class="faq-item">
+        <h4>How is the qualifying deposit defined?</h4>
+        <p>A qualifying deposit is a deposit of <strong>$250 USD or equivalent</strong> made by a referred user. Only the first qualifying deposit triggers the CPA bonus — subsequent deposits do not generate additional CPA payments.</p>
+      </div>
+      <div class="faq-item">
+        <h4>How is revenue share calculated?</h4>
+        <p>Revenue share is calculated as a percentage of the net spread/commission revenue VelozTrade earns from your referred users' trading activity. The exact rate is agreed at partner onboarding.</p>
+      </div>
+      <div class="faq-item">
+        <h4>What happens to seeded capital if I stop referring?</h4>
+        <p>Referrals already made are permanent. Your capital unlock percentage is based on historical depositing referral counts — it does not decrease if referral activity slows. However, advancing to higher milestone stages requires reaching the new depositor targets.</p>
+      </div>
+      <div class="faq-item">
+        <h4>Can I see which referrals have deposited?</h4>
+        <p>Your Partner Portal shows the count of depositing vs. total referrals. For privacy, individual referred users are displayed with masked IDs. The admin panel provides full detail to the VelozTrade team.</p>
+      </div>
+      <div class="faq-item">
+        <h4>Is there a cap on earnings?</h4>
+        <p>There is no earnings cap. CPA bonuses, revenue share, and seeded capital profits are uncapped and accumulate for the lifetime of each referral's account.</p>
+      </div>
+    </div>
+
+    <!-- Terms + Contact column -->
+    <div>
+      <div class="label" style="margin-bottom:6px;">Terms Summary</div>
+      <h2 class="section-title" style="font-size:16pt;margin-bottom:14px;">Key Program Terms</h2>
+
+      <div class="card" style="margin-bottom:16px;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Term</th>
+              <th>Detail</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="color:var(--muted);">Referral Attribution</td>
+              <td>Permanent (no cookie expiry)</td>
+            </tr>
+            <tr>
+              <td style="color:var(--muted);">Qualifying Deposit</td>
+              <td>$250 USD minimum</td>
+            </tr>
+            <tr>
+              <td style="color:var(--muted);">CPA Payment</td>
+              <td>On first qualifying deposit</td>
+            </tr>
+            <tr>
+              <td style="color:var(--muted);">Rev Share</td>
+              <td>Lifetime, per trade</td>
+            </tr>
+            <tr>
+              <td style="color:var(--muted);">Min. Withdrawal</td>
+              <td>$10</td>
+            </tr>
+            <tr>
+              <td style="color:var(--muted);">KYC Required</td>
+              <td>Yes, before withdrawal</td>
+            </tr>
+            <tr>
+              <td style="color:var(--muted);">Self-Referral</td>
+              <td>Not permitted</td>
+            </tr>
+            <tr>
+              <td style="color:var(--muted);">Program Modifications</td>
+              <td>30 days notice to partners</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="info-box" style="margin-bottom:16px;">
+        <strong>Prohibited Activities:</strong> Spam, misleading advertising, paid search ads using "VelozTrade" brand terms, incentivised sign-ups without disclosure, or misrepresentation of the platform's features or returns.
+      </div>
+
+      <!-- CTA / Contact -->
+      <div class="card" style="background:linear-gradient(135deg,rgba(0,114,255,0.12),rgba(0,212,255,0.08));border-color:rgba(0,114,255,0.3);">
+        <div style="font-size:10pt;font-weight:800;color:var(--text);margin-bottom:6px;">Ready to Partner?</div>
+        <p style="font-size:8.5pt;color:var(--muted);margin-bottom:12px;line-height:1.5;">Log in to VelozTrade and visit the Partner section to begin your application, or contact our partnership team directly.</p>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="display:flex;align-items:center;gap:8px;font-size:8.5pt;color:var(--text);">
+            <span style="color:var(--cyan);">🌐</span>veloztrade.com/partner
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:8.5pt;color:var(--text);">
+            <span style="color:var(--cyan);">📧</span>partners@veloztrade.com
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom legal note -->
+  <div class="divider" style="margin-top:24px;"></div>
+  <p style="font-size:7pt;color:rgba(124,163,204,0.45);line-height:1.6;text-align:center;">
+    This document is confidential and intended solely for prospective and active VelozTrade partners. Commission rates and milestone structures are indicative and may vary based on individual partner agreements. Trading involves risk; past performance is not indicative of future results. VelozTrade does not guarantee profitability of seeded capital. All figures in USD unless stated otherwise.
+  </p>
+
+  <div class="page-footer">
+    <span>VelozTrade — Confidential Partner Document</span>
+    <span>veloztrade.com</span>
+    <span>Page 5 of 5</span>
+  </div>
+</div>
+
+</body>
+</html>

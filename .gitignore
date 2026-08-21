@@ -42,17 +42,17 @@ Thumbs.db
 # Local caches
 .cache/
 .local/
-.replit
-.replitignore
-.replit-artifact
 
 # Environment files (do not commit secrets)
 .env*.local
 .env*.secret
 
 # Replit specific
-/replit
-/replit.md
 
 # Artifacts secrets placeholder
-DEPLOY_RENDER.md
+
+# Environment / secrets — never commit
+.env
+.env.*
+**/.env
+*.pem

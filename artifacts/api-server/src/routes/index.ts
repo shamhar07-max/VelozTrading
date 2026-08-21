@@ -1,0 +1,42 @@
+import { Router, type IRouter } from "express";
+import healthRouter from "./health";
+import accountRouter from "./account";
+import instrumentsRouter from "./instruments";
+import positionsRouter from "./positions";
+import ordersRouter from "./orders";
+import pendingOrdersRouter from "./pendingOrders";
+import watchlistRouter from "./watchlist";
+import dashboardRouter from "./dashboard";
+import alertsRouter from "./alerts";
+import adminRouter from "./admin";
+import calendarRouter from "./calendar";
+import leaderboardRouter from "./leaderboard";
+import fundsHistoryRouter from "./fundsHistory";
+import notificationsRouter from "./notifications";
+import cryptoDepositRouter from "./cryptoDeposit";
+import socialRouter from "./social";
+import exportPdfRouter from "./exportPdf";
+import partnerRouter from "./partner";
+
+const router: IRouter = Router();
+
+router.use(healthRouter);
+router.use(accountRouter);
+router.use(instrumentsRouter);
+router.use(positionsRouter);
+router.use(ordersRouter);
+router.use(pendingOrdersRouter);
+router.use(watchlistRouter);
+router.use(dashboardRouter);
+router.use(alertsRouter);
+router.use(adminRouter);
+router.use(calendarRouter);
+router.use(leaderboardRouter);
+router.use(fundsHistoryRouter);
+router.use(notificationsRouter);
+router.use(cryptoDepositRouter);
+router.use(socialRouter);
+router.use(exportPdfRouter);
+router.use(partnerRouter);
+
+export default router;
