@@ -74,6 +74,37 @@ function splitStatements(sql: string): string[] {
     .filter((s) => s.length > 0);
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Acquire a connection with retries. Serverless Postgres providers (Neon)
+ * auto-suspend idle databases; the first connection after a wake-up can take
+ * several seconds, so a single attempt at container boot would crash-loop
+ * the deployment for a database that is actually healthy.
+ */
+async function connectWithRetry(
+  pool: pg.Pool,
+  attempts = 6,
+  baseDelayMs = 2_000,
+): Promise<pg.PoolClient> {
+  let lastErr: Error | null = null;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await pool.connect();
+    } catch (err) {
+      lastErr = err as Error;
+      if (attempt < attempts) {
+        const delay = baseDelayMs * attempt;
+        console.warn(
+          `migrate: database not reachable (${lastErr.message.split("\n")[0]}) — retry ${attempt}/${attempts - 1} in ${delay}ms`
+        );
+        await sleep(delay);
+      }
+    }
+  }
+  throw lastErr!;
+}
+
 async function main(): Promise<void> {
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL must be set for migrations");
@@ -93,7 +124,7 @@ async function main(): Promise<void> {
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
 
   try {
-    const client = await pool.connect();
+    const client = await connectWithRetry(pool);
     try {
       await client.query("SELECT pg_advisory_lock($1)", [ADVISORY_LOCK_KEY]);
       await client.query(`
