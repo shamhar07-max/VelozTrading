@@ -106,6 +106,17 @@ async function connectWithRetry(
 }
 
 async function main(): Promise<void> {
+  // Hard watchdog: if anything (driver quirk, serverless-postgres socket
+  // keep-alive, network black hole) blocks migration completion, die loudly
+  // instead of hanging the whole startCommand chain — the API server never
+  // boots until this process exits, so hanging here = permanent 503s.
+  const WATCHDOG_MS = 120_000;
+  const watchdog = setTimeout(() => {
+    console.error(`migrate: FAILED — exceeded ${WATCHDOG_MS / 1000}s watchdog`);
+    process.exit(1);
+  }, WATCHDOG_MS);
+  watchdog.unref();
+
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL must be set for migrations");
   }
@@ -173,6 +184,13 @@ async function main(): Promise<void> {
   } finally {
     await pool.end();
   }
+
+  // Explicit success exit. Do not rely on the event loop draining: lingering
+  // sockets (e.g. serverless-pooler keep-alives) have been known to keep a
+  // finished Node process alive indefinitely, which would stall the
+  // `migrate && start-server` chain and leave the deployment with no listener.
+  console.log("migrate: done, exiting");
+  process.exit(0);
 }
 
 main().catch((err) => {

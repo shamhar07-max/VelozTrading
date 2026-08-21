@@ -180,7 +180,14 @@ app.use(express.urlencoded({ extended: true }));
 // local deploys with placeholder keys (pk_test_REPLACE_ME) and for Docker/Koyeb
 // health checks that must return 200 even before Clerk is configured.
 app.get("/api/healthz", (_req, res) => {
-  res.json({ status: "ok" });
+  // Runtime details make remote deployment debugging possible: if a probe or
+  // browser reaches this route, the payload proves WHICH process answered.
+  res.json({
+    status: "ok",
+    node: process.version,
+    pid: process.pid,
+    uptimeSec: Math.round(process.uptime()),
+  });
 });
 
 const __dirnameForConfig = path.dirname(fileURLToPath(import.meta.url));
