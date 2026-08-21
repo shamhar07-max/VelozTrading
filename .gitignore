@@ -57,5 +57,5 @@ Thumbs.db
 **/.env
 *.pem
 
-# Replit artifacts
+# Legacy platform artifact metadata
 .replit-artifact/
