@@ -32,9 +32,17 @@ minimumReleaseAge: 1440
 onlyBuiltDependencies:
   - '@swc/core'
   - esbuild
+  - unrs-resolver
+
+# Explicitly skip postinstall scripts pnpm would otherwise leave "pending"
+# (pending builds are a fatal error in non-interactive Docker/CI installs).
+ignoredBuiltDependencies:
+  - '@clerk/shared'
+  - bufferutil
+  - keccak
   - msw
   - puppeteer
-  - unrs-resolver
+  - utf-8-validate
 
 overrides:
   '@esbuild-kit/esm-loader': npm:tsx@^4.21.0

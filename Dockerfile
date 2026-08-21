@@ -3,6 +3,10 @@ FROM node:24-slim AS build
 WORKDIR /app
 RUN corepack enable
 
+# Non-interactive corepack + pnpm (packageManager field pins pnpm@10.26.0)
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+    CI=true
+
 # Skip the ~150MB Chromium download — PDF export degrades gracefully without it;
 # the /api/export-pdf route degrades gracefully without a browser binary.
 ENV PUPPETEER_SKIP_DOWNLOAD=true \
