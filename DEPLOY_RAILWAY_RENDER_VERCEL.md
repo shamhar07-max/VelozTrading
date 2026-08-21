@@ -1,12 +1,34 @@
-# Deploying VelozTrade — Railway / Render / Vercel
+# Deploying VelozTrade — Koyeb / Railway / Render / Vercel
 
 | Platform | API + WebSocket + background jobs | Verdict |
 |---|---|---|
-| **Railway** | ✅ Always-on Docker, native WS | **Best single-platform fit** (~$5/mo hobby) |
+| **Koyeb** | ✅ Always-on free web service, native WS, no sleep | **Recommended** — see DEPLOY.md; CLI one-shot deploy below |
+| **Railway** | ⚠️ Works, but Target Port defaults to 80 for Dockerfile services and no PORT is injected — app must answer both doors (it now does) or probes loop on "service unavailable" | Fine once green |
 | **Render** | ⚠️ Works, but `free` plan sleeps after 15 min idle → breaks price stream / SL-TP engine. Use `starter` ($7/mo) | Good paid option; blueprint included (`render.yaml`) |
 | **Vercel** | ❌ Impossible for the backend — serverless has no persistent process: no WebSocket server, no `setInterval` jobs (SL/TP, stop-out, deposit scanner) | Frontend-only split hosting at most |
 
-The app is one Node process serving SPA + REST + `/ws` on a single port — any always-on container host runs it unchanged via the root `Dockerfile`.
+The app is one Node process serving SPA + REST + `/ws` on a single port — any always-on container host runs it unchanged via the root `Dockerfile`. Since the dual-port fix (primary `PORT`/EXPOSE + auxiliary probe port), the container answers health checks regardless of which port the platform decides to knock on.
+
+---
+
+## Option A0 — Koyeb one-shot CLI deploy
+
+```bash
+koyeb login                                  # or: export KOYEB_TOKEN=...
+cd VelozTrade
+koyeb apps init veloztrade \
+  --archive-builder docker --archive-docker-dockerfile Dockerfile \
+  --ports 8080:http \
+  --checks 8080:http:/api/healthz \
+  --region fra \
+  --env DATABASE_URL="postgresql://…pooler….neon.tech/neondb?sslmode=require" \
+  --env CLERK_PUBLISHABLE_KEY=pk_test_… \
+  --env CLERK_SECRET_KEY=sk_test_… \
+  --env ADMIN_EMAILS=you@example.com \
+  --env NODE_ENV=production
+```
+
+Free instance is always-on (no sleep) — WebSocket streams and the trading engine keep running.
 
 ---
 
