@@ -18,8 +18,26 @@ import pg from "pg";
 const ADVISORY_LOCK_KEY = 727_272_001;
 
 const distDir = path.dirname(fileURLToPath(import.meta.url));
-const MIGRATIONS_DIR =
-  process.env.MIGRATIONS_DIR ?? path.resolve(distDir, "../../migrations");
+
+// Candidate locations, first match wins:
+//  - explicit override (dev / CI)
+//  - Docker runtime layout: dist is /app/artifacts/api-server/dist,
+//    migrations are copied to /app/migrations (three levels up)
+//  - fallback one level shallower for alternative layouts
+const CANDIDATE_DIRS = [
+  process.env.MIGRATIONS_DIR,
+  path.resolve(distDir, "../../../migrations"),
+  path.resolve(distDir, "../../migrations"),
+].filter((d): d is string => Boolean(d));
+
+function resolveMigrationsDir(): string | null {
+  for (const dir of CANDIDATE_DIRS) {
+    if (fs.existsSync(dir) && fs.readdirSync(dir).some((f) => f.endsWith(".sql"))) {
+      return dir;
+    }
+  }
+  return null;
+}
 
 export interface PendingPlan {
   pending: string[];
@@ -59,6 +77,16 @@ function splitStatements(sql: string): string[] {
 async function main(): Promise<void> {
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL must be set for migrations");
+  }
+
+  // Fail fast if no migrations can be located. Booting an app against an
+  // empty/unmigrated database silently would be far worse than crashing here.
+  const MIGRATIONS_DIR = resolveMigrationsDir();
+  if (!MIGRATIONS_DIR) {
+    console.error(
+      `migrate: FAILED — no .sql migration files found. Searched: ${CANDIDATE_DIRS.join(", ")}`
+    );
+    process.exit(1);
   }
 
   const files = loadSqlFiles(MIGRATIONS_DIR);
