@@ -1,0 +1,20 @@
+# Railway configuration — https://docs.railway.app/reference/config-as-code
+#
+# Railway is the best single-platform fit for VelozTrade:
+#   ✔ long-running Docker service (no sleep) → WebSocket + background jobs work
+#   ✔ native WebSockets
+#   ✔ usage-based pricing (hobby ≈ $5/mo covers a low-traffic deployment)
+#
+# Deploy: railway.app → New Project → Deploy from GitHub repo → select this repo
+# → Settings → Networking → Generate Domain → add the env vars below.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "node --enable-source-maps artifacts/api-server/dist/index.mjs"
+healthcheckPath = "/api/healthz"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

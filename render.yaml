@@ -1,37 +1,58 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# ⚠️ Read before deploying:
+#  - The `free` web plan SLEEPS after ~15 min idle. This app runs WebSocket
+#    streams + background jobs (SL/TP, stop-out, deposit scanner) that require
+#    an ALWAYS-ON service — use the `starter` plan ($7/mo) for anything real.
+#  - Postgres: Render's free Postgres EXPIRES AFTER 30 DAYS. This blueprint
+#    therefore expects a permanent external Postgres (Neon free tier):
+#    set DATABASE_URL manually after first deploy, or uncomment the
+#    databases block below for a quick throwaway environment.
+#
+# Deploy: Render Dashboard → New → Blueprint → connect this repo.
+
 services:
   - type: web
     name: veloztrade
-    env: docker
+    runtime: docker
     dockerfilePath: ./Dockerfile
-    plan: free
+    plan: free # change to `starter` for always-on
     healthCheckPath: /api/healthz
-    autoDeploy: false
+    autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 8080
+      # Permanent Postgres (Neon pooled connection string recommended):
+      # postgresql://user:pass@ep-xxx-pooler.<region>.aws.neon.tech/<db>?sslmode=require
       - key: DATABASE_URL
-        fromDatabase:
-          name: veloztrade-db
-          property: connectionString
+        sync: false
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false # pk_test_… / pk_live_…
       - key: CLERK_SECRET_KEY
+        sync: false # sk_test_… / sk_live_…
+      # Comma-separated admin emails (fallback authz alongside Clerk role metadata)
+      - key: ADMIN_EMAILS
         sync: false
-      - key: CLERK_PUBLISHABLE_KEY
+      # Set to your final https://<app>.onrender.com before onboarding users —
+      # empty allows ALL origins (documented in security-findings.md)
+      - key: ALLOWED_ORIGINS
         sync: false
-      - key: CLERK_PUBLISHABLE_KEY
-        sync: false
-      # optional market data
+      # One-time admin bootstrap — generated here; REMOVE after granting admin
+      - key: BOOTSTRAP_SECRET
+        generateValue: true
+      # Optional integrations
       - key: TWELVEDATA_API_KEY
         sync: false
       - key: FINNHUB_API_KEY
         sync: false
-      - key: ANTHROPIC_API_KEY
+      - key: RESEND_API_KEY
         sync: false
 
-databases:
-  - name: veloztrade-db
-    plan: free
-    databaseName: veloztrade
-    user: veloz
-    # Render auto-generates password and exposes DATABASE_URL
+# Quick-throwaway DB option (EXPIRES AFTER 30 DAYS on free plan):
+# databases:
+#   - name: veloztrade-db
+#     plan: free
+#     databaseName: veloztrade
+#     user: veloz
