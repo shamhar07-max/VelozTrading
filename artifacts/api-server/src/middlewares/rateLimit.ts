@@ -43,6 +43,17 @@ export const accountRateLimit = rateLimit({
   handler: makeHandler("Too many account update requests — please wait a moment."),
 });
 
+// One-time admin bootstrap endpoint — strict per-IP limit. This route runs before
+// normal auth flows are trusted, so key by IP (express-rate-limit default).
+export const bootstrapRateLimit = rateLimit({
+  windowMs: 10 * 60_000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
+  handler: makeHandler("Too many bootstrap attempts — try again later."),
+});
+
 // Admin mutations — higher headroom since admins do batch operations, but still
 // keyed by userId to prevent automated scripts abusing admin credentials.
 export const adminRateLimit = rateLimit({

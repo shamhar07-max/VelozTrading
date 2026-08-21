@@ -1,11 +1,12 @@
 import { Router, type IRouter } from "express";
 import { eq, and, count, sql, desc } from "drizzle-orm";
 import { clerkClient, getAuth } from "@clerk/express";
-import { db, accountsTable, positionsTable, ordersTable, depositRequestsTable, withdrawalRequestsTable, cryptoDepositsTable, partnersTable, referralsTable, partnerCommissionsTable } from "@workspace/db";
+import { db, accountsTable, positionsTable, ordersTable, depositRequestsTable, withdrawalRequestsTable, cryptoDepositsTable, partnersTable, referralsTable, partnerCommissionsTable, transactionsTable } from "@workspace/db";
 import { recalcPartnerUnlock } from "./partner";
 import { priceCache, changePercentCache, getWssClientCount } from "../ws/priceStreamer";
 import { requireAdmin } from "../middlewares/requireAdmin";
-import { adminRateLimit } from "../middlewares/rateLimit";
+import { adminRateLimit, bootstrapRateLimit } from "../middlewares/rateLimit";
+import { recordTransaction } from "../lib/ledger";
 import { getPrice } from "../lib/twelvedata";
 import { INSTRUMENT_MAP, LEVERAGE_BY_TYPE } from "../lib/instruments";
 import {
@@ -79,7 +80,7 @@ async function recalcAccountTier(
 // Bootstrap: sets the calling user as admin if no admin exists yet (one-time setup).
 // Requires a BOOTSTRAP_SECRET env var — send it as "Authorization: Bearer <secret>".
 // If BOOTSTRAP_SECRET is not set, this endpoint is disabled.
-router.post("/admin/bootstrap", async (req, res): Promise<void> => {
+router.post("/admin/bootstrap", bootstrapRateLimit, async (req, res): Promise<void> => {
   const bootstrapSecret = process.env.BOOTSTRAP_SECRET;
   if (!bootstrapSecret) {
     res.status(503).json({
@@ -241,6 +242,22 @@ router.post("/admin/users/:clerkUserId/reset-balance", requireAdmin, adminRateLi
       .update(accountsTable)
       .set({ balance: resetBalance })
       .where(eq(accountsTable.clerkUserId, clerkUserId));
+
+    if (account) {
+      const delta = parseFloat(resetBalance) - parseFloat(String(account.balance));
+      if (delta !== 0) {
+        await recordTransaction(tx, {
+          clerkUserId,
+          accountId: account.id,
+          type: "admin_adjustment",
+          amount: delta.toFixed(2),
+          balanceAfter: resetBalance,
+          isDemo: false,
+          refType: "admin_reset",
+          description: `Admin balance reset → $${resetBalance} (positions cleared)`,
+        });
+      }
+    }
   });
 
   res.json({ ok: true, newBalance: resetBalance });
@@ -253,10 +270,36 @@ router.patch("/admin/users/:clerkUserId/balance", requireAdmin, adminRateLimit, 
     res.status(400).json({ error: "Invalid balance" });
     return;
   }
-  await db
-    .update(accountsTable)
-    .set({ balance: balance.toFixed(2) })
+  const [account] = await db
+    .select()
+    .from(accountsTable)
     .where(eq(accountsTable.clerkUserId, clerkUserId));
+  if (!account) {
+    res.status(404).json({ error: "Account not found" });
+    return;
+  }
+
+  const newBalance = balance.toFixed(2);
+  await db.transaction(async (tx) => {
+    await tx
+      .update(accountsTable)
+      .set({ balance: newBalance })
+      .where(eq(accountsTable.clerkUserId, clerkUserId));
+
+    const delta = balance - parseFloat(String(account.balance));
+    if (delta !== 0) {
+      await recordTransaction(tx, {
+        clerkUserId,
+        accountId: account.id,
+        type: "admin_adjustment",
+        amount: delta.toFixed(2),
+        balanceAfter: newBalance,
+        isDemo: false,
+        refType: "admin_edit",
+        description: `Admin set balance $${parseFloat(String(account.balance)).toFixed(2)} → ${newBalance}`,
+      });
+    }
+  });
   res.json({ ok: true });
 });
 
@@ -360,9 +403,55 @@ router.delete("/admin/positions/:id", requireAdmin, adminRateLimit, async (req, 
       .update(accountsTable)
       .set({ balance: sql`balance + ${pnl.toFixed(2)}::numeric` })
       .where(eq(accountsTable.clerkUserId, pos.clerkUserId));
+    await recordTransaction(tx, {
+      clerkUserId: pos.clerkUserId,
+      accountId: pos.accountId,
+      type: "admin_adjustment",
+      amount: pnl.toFixed(2),
+      isDemo: pos.isDemo,
+      refType: "position",
+      refId: pos.id,
+      description: `Admin force-close ${pos.symbol} @ ${resolvedPrice} (PnL applied)`,
+    });
   });
 
   res.json({ ok: true, closedAt: resolvedPrice, pnl: parseFloat(pnl.toFixed(2)) });
+});
+
+// Ledger audit trail — every balance movement across all users (admin view)
+router.get("/admin/transactions", requireAdmin, async (req, res): Promise<void> => {
+  const { userId, type } = req.query as Record<string, string>;
+  const PAGE = Math.max(1, parseInt(String(req.query.page ?? "1")) || 1);
+  const LIMIT = Math.min(200, Math.max(1, parseInt(String(req.query.limit ?? "100")) || 100));
+
+  const conditions = [];
+  if (userId) conditions.push(eq(transactionsTable.clerkUserId, userId));
+  if (type) conditions.push(eq(transactionsTable.type, type));
+
+  const rows = await db
+    .select()
+    .from(transactionsTable)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(transactionsTable.createdAt))
+    .limit(LIMIT)
+    .offset((PAGE - 1) * LIMIT);
+
+  res.json({
+    page: PAGE,
+    limit: LIMIT,
+    items: rows.map((r) => ({
+      id: r.id,
+      clerkUserId: r.clerkUserId,
+      type: r.type,
+      amount: parseFloat(r.amount),
+      balanceAfter: r.balanceAfter ? parseFloat(r.balanceAfter) : null,
+      isDemo: r.isDemo,
+      refType: r.refType ?? null,
+      refId: r.refId ?? null,
+      description: r.description ?? null,
+      createdAt: r.createdAt.toISOString(),
+    })),
+  });
 });
 
 router.patch("/admin/users/:clerkUserId/kyc", requireAdmin, adminRateLimit, async (req, res): Promise<void> => {
@@ -485,6 +574,15 @@ router.patch("/admin/deposits/:id", requireAdmin, adminRateLimit, async (req, re
         .update(accountsTable)
         .set({ balance: sql`balance + ${request.amount}::numeric` })
         .where(eq(accountsTable.clerkUserId, request.clerkUserId));
+      await recordTransaction(tx, {
+        clerkUserId: request.clerkUserId,
+        type: "deposit",
+        amount: request.amount,
+        isDemo: false,
+        refType: "deposit_request",
+        refId: request.id,
+        description: `Deposit approved — ${request.method}`,
+      });
       newTier = await recalcAccountTier(tx, request.clerkUserId);
 
       // ── CPA commission trigger ──────────────────────────────────────────
@@ -527,6 +625,16 @@ router.patch("/admin/deposits/:id", requireAdmin, adminRateLimit, async (req, re
                 .update(accountsTable)
                 .set({ balance: sql`balance + ${cpaAmount.toFixed(2)}::numeric` })
                 .where(eq(accountsTable.clerkUserId, partner.clerkUserId));
+
+              await recordTransaction(tx, {
+                clerkUserId: partner.clerkUserId,
+                type: "partner_cpa",
+                amount: cpaAmount.toFixed(2),
+                isDemo: false,
+                refType: "deposit_request",
+                refId: request.id,
+                description: `CPA bonus — referred user ${request.clerkUserId} deposited $${depositAmount.toFixed(2)}`,
+              });
 
               // Insert commission audit row
               await tx
@@ -721,6 +829,16 @@ router.patch("/admin/crypto-deposits/:id", requireAdmin, adminRateLimit, async (
         throw new Error("account_not_found");
       }
 
+      await recordTransaction(tx, {
+        clerkUserId: record.clerkUserId,
+        type: "deposit_crypto",
+        amount: amountUsdt.toFixed(2),
+        isDemo: false,
+        refType: "crypto_deposit",
+        refId: record.id,
+        description: `On-chain USDT deposit confirmed — ${record.txHash.slice(0, 18)}…`,
+      });
+
       await recalcAccountTier(tx, record.clerkUserId);
     }
   }).catch((err: Error) => {
@@ -862,10 +980,24 @@ router.patch("/admin/withdrawals/:id", requireAdmin, adminRateLimit, async (req,
 
   if (action === "reject") {
     // Refund the held balance back to the user (was deducted at submission time)
-    await db
-      .update(accountsTable)
-      .set({ balance: sql`balance + ${request.amount}::numeric` })
-      .where(eq(accountsTable.clerkUserId, request.clerkUserId));
+    await db.transaction(async (tx) => {
+      const [refunded] = await tx
+        .update(accountsTable)
+        .set({ balance: sql`balance + ${request.amount}::numeric` })
+        .where(eq(accountsTable.clerkUserId, request.clerkUserId))
+        .returning({ balance: accountsTable.balance });
+
+      await recordTransaction(tx, {
+        clerkUserId: request.clerkUserId,
+        type: "withdrawal_refund",
+        amount: request.amount,
+        balanceAfter: refunded?.balance ?? null,
+        isDemo: false,
+        refType: "withdrawal_request",
+        refId: request.id,
+        description: `Withdrawal #${request.id} rejected — held funds returned${notes ? ` (${notes})` : ""}`,
+      });
+    });
   }
   // NOTE: On approve we do NOT deduct again — balance was already deducted
   // atomically when the user submitted the withdrawal request.

@@ -9,6 +9,7 @@ import {
   partnerCommissionsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
+import { accountRateLimit } from "../middlewares/rateLimit";
 import { sendUserNotification, partnerNewReferralSignupHtml } from "../lib/notifications";
 
 const router: IRouter = Router();
@@ -221,7 +222,7 @@ router.get("/partner/referral-code/:code", async (req, res): Promise<void> => {
 });
 
 // POST /api/partner/register-ref — called on first account load when ?ref= was in URL
-router.post("/partner/register-ref", requireAuth, async (req, res): Promise<void> => {
+router.post("/partner/register-ref", requireAuth, accountRateLimit, async (req, res): Promise<void> => {
   const userId = (req as Request & { userId: string }).userId;
   const { code, referralCode } = req.body as { code?: string; referralCode?: string };
   const raw = referralCode ?? code;

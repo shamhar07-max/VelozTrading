@@ -159,13 +159,13 @@ export function toInstrumentSymbol(rawSymbol: string): string {
   return rawSymbol;
 }
 
-export function isMarketOpen(symbol: string): boolean {
+// `now` is injectable for deterministic unit tests; defaults to wall-clock UTC.
+export function isMarketOpen(symbol: string, now: Date = new Date()): boolean {
   const inst = INSTRUMENT_MAP.get(symbol);
   if (!inst) return true;
 
   if (inst.type === "crypto") return true;
 
-  const now = new Date();
   const day = now.getUTCDay();
   const h = now.getUTCHours();
   const m = now.getUTCMinutes();

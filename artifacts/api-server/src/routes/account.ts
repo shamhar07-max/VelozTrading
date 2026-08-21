@@ -1,10 +1,11 @@
 import { Router, type IRouter, type Request } from "express";
-import { eq, and, sql, asc } from "drizzle-orm";
+import { eq, and, sql, asc, desc } from "drizzle-orm";
 import { clerkClient } from "@clerk/express";
-import { db, accountsTable, depositRequestsTable, withdrawalRequestsTable, pendingOrdersTable, ordersTable, partnersTable } from "@workspace/db";
+import { db, accountsTable, depositRequestsTable, withdrawalRequestsTable, pendingOrdersTable, ordersTable, partnersTable, transactionsTable } from "@workspace/db";
 import { GetAccountResponse } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { accountRateLimit, depositRateLimit } from "../middlewares/rateLimit";
+import { recordTransaction } from "../lib/ledger";
 import { listPositions as fetchPositions } from "./positions";
 import { getPrice } from "../lib/twelvedata";
 import { INSTRUMENT_MAP, LEVERAGE_BY_TYPE } from "../lib/instruments";
@@ -358,6 +359,18 @@ router.post("/account/withdrawal-request", requireAuth, depositRateLimit, async 
         })
         .returning();
 
+      await recordTransaction(tx, {
+        clerkUserId: userId,
+        accountId: account.id,
+        type: "withdrawal_hold",
+        amount: (-parsedAmount).toFixed(2),
+        balanceAfter: parseFloat(String(updated[0]!.newBalance)).toFixed(2),
+        isDemo: false,
+        refType: "withdrawal_request",
+        refId: req.id,
+        description: `Withdrawal request #${req.id} (${withdrawMethod}) — held pending review`,
+      });
+
       return { request: req, newBalance: parseFloat(String(updated[0]!.newBalance)) };
     });
 
@@ -418,6 +431,44 @@ router.post("/account/kyc-submission", requireAuth, accountRateLimit, async (req
   } catch { /* non-critical */ }
 
   res.json({ ok: true, kycStatus: "pending" });
+});
+
+router.get("/account/transactions", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as Request & { userId: string }).userId;
+  const limitRaw = parseInt(String(req.query.limit ?? "50"), 10);
+  const limit = Math.min(200, Math.max(1, Number.isNaN(limitRaw) ? 50 : limitRaw));
+  const offsetRaw = parseInt(String(req.query.offset ?? "0"), 10);
+  const offset = Math.max(0, Number.isNaN(offsetRaw) ? 0 : offsetRaw);
+
+  const typeFilter = typeof req.query.type === "string" ? req.query.type : null;
+  const modeFilter = req.query.mode === "demo" ? true : req.query.mode === "real" ? false : null;
+
+  const conditions = [eq(transactionsTable.clerkUserId, userId)];
+  if (typeFilter) conditions.push(eq(transactionsTable.type, typeFilter));
+  if (modeFilter !== null) conditions.push(eq(transactionsTable.isDemo, modeFilter));
+
+  const rows = await db
+    .select()
+    .from(transactionsTable)
+    .where(and(...conditions))
+    .orderBy(desc(transactionsTable.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  res.json(
+    rows.map((r) => ({
+      id: r.id,
+      type: r.type,
+      amount: parseFloat(r.amount),
+      balanceAfter: r.balanceAfter ? parseFloat(r.balanceAfter) : null,
+      currency: r.currency,
+      isDemo: r.isDemo,
+      refType: r.refType ?? null,
+      refId: r.refId ?? null,
+      description: r.description ?? null,
+      createdAt: r.createdAt.toISOString(),
+    }))
+  );
 });
 
 router.get("/account/equity-history", requireAuth, async (req, res): Promise<void> => {

@@ -8,6 +8,7 @@ import { db, positionsTable, ordersTable, accountsTable, pendingOrdersTable, ale
 import { eq, sql, and } from "drizzle-orm";
 import { clerkClient } from "@clerk/express";
 import { sendUserNotification, priceAlertHtml } from "../lib/notifications";
+import { recordTransaction } from "../lib/ledger";
 
 interface PriceMessage {
   symbol: string;
@@ -148,6 +149,16 @@ async function checkSlTpTriggers() {
               .set({ balance: sql`balance + ${profit.toFixed(2)}::numeric` })
               .where(eq(accountsTable.id, pos.accountId));
           }
+          await recordTransaction(tx, {
+            clerkUserId: pos.clerkUserId,
+            accountId: pos.accountId,
+            type: "trade_close",
+            amount: profit.toFixed(2),
+            isDemo: pos.isDemo,
+            refType: "position",
+            refId: pos.id,
+            description: `${reason} — ${pos.symbol} @ ${execPrice}`,
+          });
         });
 
         logger.info({ positionId: pos.id, symbol: pos.symbol, reason, profit: profit.toFixed(2) },
@@ -297,7 +308,7 @@ async function checkPendingOrders() {
 
         await db.transaction(async (tx) => {
           await tx.update(pendingOrdersTable).set({ status: "filled" }).where(eq(pendingOrdersTable.id, po.id));
-          await tx.insert(positionsTable).values({
+          const [filledPos] = await tx.insert(positionsTable).values({
             accountId: po.accountId,
             clerkUserId: po.clerkUserId,
             symbol: po.symbol,
@@ -310,7 +321,7 @@ async function checkPendingOrders() {
             swap: "0",
             commission: String(commission.toFixed(2)),
             isDemo,
-          });
+          }).returning({ id: positionsTable.id });
           // Deduct commission from the correct balance
           if (commission > 0) {
             if (isDemo) {
@@ -322,6 +333,16 @@ async function checkPendingOrders() {
                 .set({ balance: sql`balance - ${commission.toFixed(2)}::numeric` })
                 .where(eq(accountsTable.id, po.accountId));
             }
+            await recordTransaction(tx, {
+              clerkUserId: po.clerkUserId,
+              accountId: po.accountId,
+              type: "trade_commission",
+              amount: (-commission).toFixed(2),
+              isDemo,
+              refType: "position",
+              refId: filledPos?.id ?? null,
+              description: `Open commission — ${po.symbol} ${orderType}`,
+            });
           }
         });
 
@@ -450,6 +471,16 @@ async function checkMarginCalls() {
                   .set({ balance: sql`balance + ${profit.toFixed(2)}::numeric` })
                   .where(eq(accountsTable.id, worstPos.accountId));
               }
+              await recordTransaction(tx, {
+                clerkUserId: worstPos.clerkUserId,
+                accountId: worstPos.accountId,
+                type: "stop_out",
+                amount: profit.toFixed(2),
+                isDemo,
+                refType: "position",
+                refId: worstPos.id,
+                description: `Stop-out — ${worstPos.symbol} @ ${closePrice} (margin level ${marginLevel.toFixed(1)}%)`,
+              });
             });
 
             currentBalance += profit;
@@ -504,22 +535,32 @@ async function checkSwapAccrual() {
 
       const newSwap = parseFloat(String(pos.swap)) + swapAmount;
 
-      try {
-        await db.transaction(async (tx) => {
-          await tx.update(positionsTable)
-            .set({ swap: String(newSwap.toFixed(2)) })
-            .where(eq(positionsTable.id, pos.id));
-          if (pos.isDemo) {
-            await tx.update(accountsTable)
-              .set({ demoBalance: sql`demo_balance + ${swapAmount.toFixed(2)}::numeric` })
-              .where(eq(accountsTable.id, pos.accountId));
-          } else {
-            await tx.update(accountsTable)
-              .set({ balance: sql`balance + ${swapAmount.toFixed(2)}::numeric` })
-              .where(eq(accountsTable.id, pos.accountId));
-          }
-        });
-        swapCount++;
+        try {
+          await db.transaction(async (tx) => {
+            await tx.update(positionsTable)
+              .set({ swap: String(newSwap.toFixed(2)) })
+              .where(eq(positionsTable.id, pos.id));
+            if (pos.isDemo) {
+              await tx.update(accountsTable)
+                .set({ demoBalance: sql`demo_balance + ${swapAmount.toFixed(2)}::numeric` })
+                .where(eq(accountsTable.id, pos.accountId));
+            } else {
+              await tx.update(accountsTable)
+                .set({ balance: sql`balance + ${swapAmount.toFixed(2)}::numeric` })
+                .where(eq(accountsTable.id, pos.accountId));
+            }
+            await recordTransaction(tx, {
+              clerkUserId: pos.clerkUserId,
+              accountId: pos.accountId,
+              type: "swap_accrual",
+              amount: swapAmount.toFixed(2),
+              isDemo: pos.isDemo,
+              refType: "position",
+              refId: pos.id,
+              description: `Daily swap — ${instrument.symbol}${multiplier > 1 ? ` (×${multiplier} Wednesday)` : ""}`,
+            });
+          });
+          swapCount++;
       } catch (err) {
         logger.error({ err, positionId: pos.id }, "Swap accrual failed for position");
       }

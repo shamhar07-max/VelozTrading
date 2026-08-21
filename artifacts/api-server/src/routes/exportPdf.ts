@@ -72,7 +72,9 @@ router.get("/export/platform-pdf", async (_req, res) => {
     const htmlContent = fs.readFileSync(HTML_PATH, "utf-8");
 
     await page.setContent(htmlContent, {
-      waitUntil: "networkidle0",
+      // "load" — puppeteer ≥25 dropped networkidle* from the accepted types,
+      // and the template is local/static so waiting on network idle is unnecessary.
+      waitUntil: "load",
       timeout: 30000,
     });
 

@@ -18,6 +18,7 @@ import { tradingRateLimit } from "../middlewares/rateLimit";
 import { getOrCreateAccount } from "./account";
 import { getPrice } from "../lib/twelvedata";
 import { INSTRUMENT_MAP, LEVERAGE_BY_TYPE, TIER_CONFIG } from "../lib/instruments";
+import { recordTransaction } from "../lib/ledger";
 
 const router: IRouter = Router();
 
@@ -205,11 +206,31 @@ router.post("/positions", requireAuth, tradingRateLimit, async (req, res): Promi
           .update(accountsTable)
           .set({ demoBalance: sql`demo_balance - ${commission.toFixed(2)}::numeric` })
           .where(eq(accountsTable.id, account.id));
+        await recordTransaction(tx, {
+          clerkUserId: userId,
+          accountId: account.id,
+          type: "trade_commission",
+          amount: (-commission).toFixed(2),
+          isDemo,
+          refType: "position",
+          refId: pos.id,
+          description: `Open commission — ${symbol} ${direction} ${volume} lots`,
+        });
       } else {
         await tx
           .update(accountsTable)
           .set({ balance: sql`balance - ${commission.toFixed(2)}::numeric` })
           .where(eq(accountsTable.id, account.id));
+        await recordTransaction(tx, {
+          clerkUserId: userId,
+          accountId: account.id,
+          type: "trade_commission",
+          amount: (-commission).toFixed(2),
+          isDemo,
+          refType: "position",
+          refId: pos.id,
+          description: `Open commission — ${symbol} ${direction} ${volume} lots`,
+        });
 
         // ── Revenue-share trigger (real trades only) ────────────────────
         if (account.referredByPartnerId) {
@@ -243,6 +264,16 @@ router.post("/positions", requireAuth, tradingRateLimit, async (req, res): Promi
                 .update(accountsTable)
                 .set({ balance: sql`balance + ${revShareAmt.toFixed(2)}::numeric` })
                 .where(eq(accountsTable.clerkUserId, partner.clerkUserId));
+
+              await recordTransaction(tx, {
+                clerkUserId: partner.clerkUserId,
+                type: "partner_rev_share",
+                amount: revShareAmt.toFixed(2),
+                isDemo: false,
+                refType: "position",
+                refId: pos.id,
+                description: `Revenue share (${(parseFloat(String(partner.revSharePct)) * 100).toFixed(1)}% of commission) — referred trader ${userId}`,
+              });
             }
           }
         }
@@ -417,6 +448,16 @@ router.delete("/positions/:id", requireAuth, tradingRateLimit, async (req, res):
         .update(accountsTable)
         .set({ demoBalance: sql`demo_balance + ${profit.toFixed(2)}::numeric` })
         .where(eq(accountsTable.id, pos.accountId));
+      await recordTransaction(tx, {
+        clerkUserId: userId,
+        accountId: pos.accountId,
+        type: "trade_close",
+        amount: profit.toFixed(2),
+        isDemo: true,
+        refType: "order",
+        refId: order.id,
+        description: `Close ${pos.symbol} @ ${closePrice}`,
+      });
     } else {
       // ── Partner profit split (real trades only) ──────────────────────
       // Partners keep 70% of trading profit per the VelozPartner Pro program.
@@ -441,6 +482,20 @@ router.delete("/positions/:id", requireAuth, tradingRateLimit, async (req, res):
         .update(accountsTable)
         .set({ balance: sql`balance + ${creditedProfit.toFixed(2)}::numeric` })
         .where(eq(accountsTable.id, pos.accountId));
+
+      await recordTransaction(tx, {
+        clerkUserId: userId,
+        accountId: pos.accountId,
+        type: "trade_close",
+        amount: creditedProfit.toFixed(2),
+        isDemo: false,
+        refType: "order",
+        refId: order.id,
+        description:
+          selfPartnerId && profit > 0
+            ? `Close ${pos.symbol} @ ${closePrice} — partner 70/30 split applied`
+            : `Close ${pos.symbol} @ ${closePrice}`,
+      });
 
       // ── Trading-profit audit stream ──────────────────────────────────
       // Record profitable closes in partner_commissions for full 3-stream

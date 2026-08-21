@@ -105,9 +105,22 @@ These are known gaps to be addressed in a follow-up hardening task:
 
 | Risk | Status | Task |
 |---|---|---|
-| Rate limiting not applied to all mutating routes (account PATCH, withdrawal, deposit-request) | Not fixed here | Task #22 (Security hardening) |
-| `/admin/bootstrap` endpoint is unauthenticated — relies on "no admin exists yet" logic | Not fixed here | Task #22 |
+| Rate limiting not applied to all mutating routes (account PATCH, withdrawal, deposit-request) | ✅ Fixed in hardening pass — verified every POST/PATCH/DELETE route carries a limiter; added IP-based limit to `/admin/bootstrap` and userId limit to `/partner/register-ref` | Done |
+| `/admin/bootstrap` endpoint is unauthenticated — relies on "no admin exists yet" logic | ✅ Hardened — now rate-limited (5 attempts / 10 min per IP); remains disabled unless `BOOTSTRAP_SECRET` is set | Done |
 | `ALLOWED_ORIGINS` CORS config must be set to production domain before go-live | Documented — no code change needed | Set `ALLOWED_ORIGINS=https://<your-domain>` in the deployment environment |
+
+---
+
+## 6. Follow-up hardening pass (2026-08)
+
+Additional fixes applied after the original audit:
+
+| Fix | Detail |
+|---|---|
+| **Admin authorization inconsistency** | `requireAdmin` previously authorized by one hardcoded email while bootstrap/`set-admin` granted `publicMetadata.role = "admin"` (never checked). Now: role metadata **or** `ADMIN_EMAILS` env allowlist. |
+| **Financial ledger** | New immutable `transactions` table; every balance mutation (deposits, withdrawal hold/refund, commissions, trade close, swaps, stop-outs, CPA, rev-share, admin adjustments) writes an audit row inside the same DB transaction. Exposed via `GET /api/account/transactions` and `GET /api/admin/transactions`. Run `pnpm --filter @workspace/db run push` to apply the schema change. |
+| **Latent type error** | `exportPdf.ts` used `waitUntil: "networkidle0"`, rejected by puppeteer ≥25 types — first real `pnpm typecheck` run caught it; switched to `"load"`. |
+| **Test suite** | 20 vitest unit tests covering market-hours rules, instrument catalog integrity, tier monotonicity, canonical PnL/margin formulas (`lib/tradingMath.ts`). CI workflow added (`.github/workflows/ci.yml`). |
 
 ---
 
