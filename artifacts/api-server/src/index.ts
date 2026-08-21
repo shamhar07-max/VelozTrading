@@ -22,6 +22,10 @@ setupWebSocket(server);
 setupDepositScanner(logger);
 
 server.listen(port, () => {
+  // Plain-text line (in addition to the structured pino entry) so the bound
+  // port is unmistakable when scanning platform deploy logs for the value
+  // that must match the platform's health-check/probe target port.
+  console.log(`VelozTrade listening on http://0.0.0.0:${port} (PORT=${rawPort})`);
   logger.info({ port }, "Server listening");
 });
 
