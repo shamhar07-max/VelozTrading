@@ -14,7 +14,10 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 startCommand = "node --enable-source-maps artifacts/api-server/dist/migrate.mjs && node --enable-source-maps artifacts/api-server/dist/index.mjs"
-healthcheckPath = "/api/healthz"
-healthcheckTimeout = 300
+# Health-check gating REMOVED by request: Railway now considers the deploy
+# live as soon as the container starts instead of blocking on probe retries.
+# The /api/healthz route stays available for manual/uptime monitoring —
+# verify a deployment yourself with:
+#   curl -s https://<domain>/api/healthz
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
