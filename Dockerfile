@@ -38,8 +38,11 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Full workspace node_modules: the esbuild bundle externalizes native modules,
-# and pino transports / google-cloud storage load files at runtime.
+# and pino transports load files at runtime.
 COPY --from=build /app/node_modules ./node_modules
+# pnpm installs workspace deps in per-package node_modules (symlinks into the
+# root store). Externalized packages (e.g. puppeteer) resolve from here.
+COPY --from=build /app/artifacts/api-server/node_modules ./artifacts/api-server/node_modules
 COPY --from=build /app/artifacts/api-server/dist ./artifacts/api-server/dist
 COPY --from=build /app/artifacts/veloztrade/dist ./artifacts/veloztrade/dist
 
