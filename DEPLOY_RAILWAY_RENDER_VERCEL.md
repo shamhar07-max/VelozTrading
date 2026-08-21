@@ -31,14 +31,25 @@ The app is one Node process serving SPA + REST + `/ws` on a single port — any 
 5. **Networking → Generate Domain** (Railway injects `PORT` automatically — no config needed).
 6. Wait for the health check to pass (`/api/healthz`).
 
-### One-time schema push (from your machine)
+### Database migrations — automatic ✅
 
-```bash
-cd VelozTrading
-DATABASE_URL="<same neon pooled string>" pnpm --filter @workspace/db run push
+You do **not** need to push the schema manually. The Docker image ships versioned
+SQL migrations (`lib/db/drizzle/`) and `dist/migrate.mjs` applies pending ones
+at container start (advisory-locked, transactional, idempotent). Watch the
+deploy logs for lines like:
+
+```
+migrate: 0 applied, 1 pending (1 total)
+migrate: applied 0000_heavy_white_queen.sql (30 statements)
 ```
 
-(The runtime image ships no source/drizzle-kit on purpose — schema changes are a controlled local step.)
+**When you change the schema** (`lib/db/src/schema/*.ts`) in the future:
+
+```bash
+pnpm --filter @workspace/db run generate   # creates lib/db/drizzle/000X_*.sql
+```
+
+Commit the generated file — the next deploy applies it automatically.
 
 ### First admin
 
@@ -80,7 +91,7 @@ Vercel cannot host this API (no long-running process ⇒ no WebSocket, no tradin
 ## Post-deploy checklist (all platforms)
 
 - [ ] `/api/healthz` returns `{"status":"ok"}`
-- [ ] Schema pushed (`transactions` table exists)
+- [ ] Migrations applied on boot (check logs for `migrate: database is up to date`)
 - [ ] Admin granted; `BOOTSTRAP_SECRET` removed
 - [ ] `ALLOWED_ORIGINS` = exact production origin (never empty with real users)
 - [ ] Prices streaming on `/ws`; demo account tradable end-to-end

@@ -45,6 +45,10 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/artifacts/api-server/node_modules ./artifacts/api-server/node_modules
 COPY --from=build /app/artifacts/api-server/dist ./artifacts/api-server/dist
 COPY --from=build /app/artifacts/veloztrade/dist ./artifacts/veloztrade/dist
+# Versioned SQL migrations — applied automatically by dist/migrate.mjs at startup
+COPY --from=build /app/lib/db/drizzle ./migrations
 
 EXPOSE 8080
-CMD ["node", "--enable-source-maps", "artifacts/api-server/dist/index.mjs"]
+# Auto-migrate on boot, then start the server. Migrations are idempotent and
+# guarded by a Postgres advisory lock, so restarts and replicas are safe.
+CMD ["sh", "-c", "node --enable-source-maps artifacts/api-server/dist/migrate.mjs && exec node --enable-source-maps artifacts/api-server/dist/index.mjs"]

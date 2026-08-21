@@ -58,7 +58,7 @@ Requirements: Node ≥ 22, pnpm 10 (Corepack), PostgreSQL (or a Neon string).
 corepack enable
 pnpm install
 
-# push schema to your database
+# push schema to your database (dev shortcut — production uses auto-migrations)
 DATABASE_URL="postgresql://…sslmode=require" pnpm --filter @workspace/db run push
 
 # run everything locally
@@ -102,7 +102,8 @@ Informed by a survey of leading OSS trading platforms ([Peatio](https://github.c
 - [ ] Adopt `lib/tradingMath.ts` at all existing PnL/margin call sites (currently duplicated inline)
 - [ ] Integration tests against a throwaway Postgres (route-level, supertest)
 - [ ] Copy-trading backend (page exists; needs leader/follower position mirroring engine)
-- [ ] Drizzle-kit SQL migrations instead of schema push; observability stack (OTel traces)
+- [x] Versioned SQL migrations (`drizzle-kit generate`) auto-applied at container start by `dist/migrate.mjs` — no manual schema push
+- [ ] Observability stack (OTel traces)
 
 ## License
 
