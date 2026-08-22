@@ -170,34 +170,34 @@ async function currencyApiBatch(symbols: string[]): Promise<Map<string, number>>
 export async function getOmniBatchPrices(symbols: string[]): Promise<Map<string, number>> {
   const result = new Map<string, number>();
 
-  // 1) Paid providers first (if keys are set they are most accurate for their domains)
-  try {
-    const td = await getTwelveBatch(symbols);
-    for (const [k,v] of td) result.set(k, v);
-  } catch { /* ignore */ }
-
-  const missing1 = symbols.filter(s => !result.has(s));
-  if (missing1.length === 0) return result;
-
-  // 2) Free GitHub/CDN providers — race in parallel, all keyless
+  // 1) Free GitHub/CDN providers FIRST — keyless, unlimited, never 429s on free tier
   const [yahoo, binance, currencyApi] = await Promise.all([
-    yahooBatch(missing1),
-    binanceBatch(missing1),
-    currencyApiBatch(missing1),
+    yahooBatch(symbols),
+    binanceBatch(symbols),
+    currencyApiBatch(symbols),
   ]);
   for (const m of [yahoo, binance, currencyApi]) for (const [k,v] of m) if (!result.has(k)) result.set(k, v);
 
-  const missing2 = symbols.filter(s => !result.has(s));
-  if (missing2.length === 0) return result;
+  let missing = symbols.filter(s => !result.has(s));
+  if (missing.length === 0) return result;
 
-  // 3) Existing fallbacks (CoinGecko for crypto, Finnhub if key set)
+  // 2) CoinGecko (free, crypto only)
   try {
-    const cgCryptos = missing2.filter(s => INSTRUMENT_MAP.get(s)?.type === "crypto");
+    const cgCryptos = missing.filter(s => INSTRUMENT_MAP.get(s)?.type === "crypto");
     if (cgCryptos.length > 0) {
       const { getCoinGeckoPrices } = await import("./coingecko");
       const cg = await getCoinGeckoPrices(cgCryptos);
       for (const [k,v] of cg) if (!result.has(k)) result.set(k, v);
     }
+  } catch { /* ignore */ }
+
+  missing = symbols.filter(s => !result.has(s));
+  if (missing.length === 0) return result;
+
+  // 3) Paid providers LAST — only for symbols free tier missed (saves quota)
+  try {
+    const td = await getTwelveBatch(missing);
+    for (const [k,v] of td) if (!result.has(k)) result.set(k, v);
   } catch { /* ignore */ }
   try {
     const still = symbols.filter(s => !result.has(s));
