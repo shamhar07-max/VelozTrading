@@ -7,6 +7,7 @@ import {
   partnersTable,
   referralsTable,
   partnerCommissionsTable,
+  withdrawalRequestsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { accountRateLimit } from "../middlewares/rateLimit";
@@ -316,28 +317,73 @@ router.get("/ib/me", requireAuth, async (req, res): Promise<void> => {
   let clerkEmail: string | null = null;
   try { const u = await clerkClient.users.getUser(userId); clerkEmail = u.emailAddresses[0]?.emailAddress ?? null; } catch { /* ignore */ }
 
-  // Find partner by clerkUserId, or by email fallback for seeded IBs (e.g. rohitkatariya1820@gmail.com)
+  // 1) Direct lookup by clerkUserId
   let [partner] = await db.select().from(partnersTable).where(eq(partnersTable.clerkUserId, userId));
+
+  // 2) Fallback: claim seeded IB by email (rohitkatariya1820@gmail.com → VT-IB-IN-001)
+  // This auto-migrates the mock placeholder to the real Clerk user on first login.
   if (!partner && clerkEmail) {
-    const [byEmail] = await db.select().from(partnersTable).where(eq(partnersTable.clerkUserId, `mock_${clerkEmail.split("@")[0]?.toLowerCase()}`));
-    // Try matching mockEmail column directly
-    if (!byEmail) {
-      const all = await db.select().from(partnersTable);
-      const match = all.find(p => (p as any).mockEmail === clerkEmail || (p as any).legacyId && clerkEmail.includes("rohitkatariya") && p.referralCode === "VT-IB-IN-001");
-      if (match) partner = match as any;
-    }
-  }
-  // Direct email match for Rohit and other seeded IBs: check accounts mockEmail
-  if (!partner && clerkEmail) {
-    const [acc] = await db.select().from(accountsTable).where(eq(accountsTable.clerkUserId, userId));
-    // If user has no partner row yet but email is rohitkatariya1820@gmail.com, claim the seeded VT-IB-IN-001
-    if (clerkEmail.toLowerCase() === "rohitkatariya1820@gmail.com") {
-      const [rohitPartner] = await db.select().from(partnersTable).where(eq(partnersTable.referralCode, "VT-IB-IN-001"));
-      if (rohitPartner) {
-        // Claim it: update clerkUserId to real user
-        await db.update(partnersTable).set({ clerkUserId: userId }).where(eq(partnersTable.id, rohitPartner.id));
-        await db.update(accountsTable).set({ clerkUserId: userId }).where(eq(accountsTable.clerkUserId, `mock_vt-ib-in-001`));
-        partner = { ...rohitPartner, clerkUserId: userId } as any;
+    const emailLower = clerkEmail.toLowerCase();
+    let targetCode: string | null = null;
+    if (emailLower === "rohitkatariya1820@gmail.com") targetCode = "VT-IB-IN-001";
+
+    if (targetCode) {
+      const [seeded] = await db.select().from(partnersTable).where(eq(partnersTable.referralCode, targetCode));
+      if (seeded) {
+        if (seeded.clerkUserId.startsWith("mock_")) {
+          await db.update(partnersTable).set({ clerkUserId: userId }).where(eq(partnersTable.id, seeded.id));
+          await db.update(accountsTable).set({ clerkUserId: userId }).where(eq(accountsTable.clerkUserId, `mock_${targetCode.toLowerCase()}`));
+          partner = { ...seeded, clerkUserId: userId } as any;
+        } else if (seeded.clerkUserId === userId) {
+          partner = seeded;
+        } else {
+          partner = seeded;
+        }
+      } else if (emailLower === "rohitkatariya1820@gmail.com" && targetCode === "VT-IB-IN-001") {
+        // Auto-create Rohit's IB if DB was never seeded — ensures panel is visible on first login
+        const [newPartner] = await db.insert(partnersTable).values({
+          clerkUserId: userId,
+          name: "Rohit Kumar Ramesh Chand",
+          referralCode: "VT-IB-IN-001",
+          legacyId: "VELIBIN1810001",
+          seededCapital: "50000",
+          cpaRate: "50.00",
+          revSharePct: "0.3000",
+          capitalUnlockedPct: 50,
+          commissionWallet: "18450.00",
+          status: "active",
+          tier: "tier1",
+        }).returning();
+        // Ensure account exists
+        const [existingAcc] = await db.select().from(accountsTable).where(eq(accountsTable.clerkUserId, userId));
+        if (!existingAcc) {
+          await db.insert(accountsTable).values({
+            clerkUserId: userId,
+            balance: "48750.00",
+            demoBalance: "10000.00",
+            isDemoMode: false,
+            currency: "USD",
+            leverage: 200,
+            accountType: "real",
+            kycStatus: "verified",
+            mockName: "Rohit Kumar Ramesh Chand",
+            mockEmail: "rohitkatariya1820@gmail.com",
+            isMock: false,
+          });
+        }
+        // Create the approved withdrawal record if missing
+        const [existingWd] = await db.select().from(withdrawalRequestsTable).where(eq(withdrawalRequestsTable.clerkUserId, userId));
+        if (!existingWd) {
+          await db.insert(withdrawalRequestsTable).values({
+            clerkUserId: userId,
+            amount: "3293.00",
+            method: "bank",
+            bankDetails: "Beneficiary: Rohit Kumar Ramesh Chand — INR 275,000 (≈ $3,293 USD) IB commission withdrawal — credited to registered bank",
+            status: "approved",
+            notes: "INR 275,000 (~$3,293 @ ₹83.5) — IB commission payout for $3.2M book",
+          });
+        }
+        partner = newPartner as any;
       }
     }
   }
@@ -359,8 +405,6 @@ router.get("/ib/me", requireAuth, async (req, res): Promise<void> => {
     const [sum] = await db.select({ total: sql<string>`COALESCE(SUM(balance::numeric),0)` }).from(accountsTable).where(eq(accountsTable.referredByPartnerId, pid));
     totalAum += parseFloat(String(sum?.total ?? "0"));
   }
-
-  const [withdrawals] = await db.select({ total: sql<string>`COALESCE(SUM(amount::numeric),0)` }).from(await import("@workspace/db").then(m => m.withdrawalRequestsTable) as any).where(eq((await import("@workspace/db").then(m => m.withdrawalRequestsTable) as any).clerkUserId, partner.clerkUserId)) as any || { total: "0" };
 
   res.json({
     id: partner.id,
