@@ -1442,4 +1442,72 @@ router.patch("/admin/orders/:id", requireAdmin, adminRateLimit, async (req, res)
   res.json({ ok: true, balanceDelta: delta });
 });
 
+// POST /admin/create-user-bypass — create a Clerk user without OTP email (admin-only)
+// Body: { email, password, firstName?, lastName?, claimReferralCode? }
+router.post("/admin/create-user-bypass", requireAdmin, adminRateLimit, async (req, res): Promise<void> => {
+  const { email, password, firstName, lastName, claimReferralCode } = req.body as {
+    email?: string; password?: string; firstName?: string; lastName?: string; claimReferralCode?: string;
+  };
+  if (!email || !password || !email.includes("@") || password.length < 8) {
+    res.status(400).json({ error: "email and password (min 8 chars) required" });
+    return;
+  }
+  const targetCode = claimReferralCode?.toUpperCase().trim();
+  try {
+    // Check if already exists
+    const existingList = await clerkClient.users.getUserList({ emailAddress: [email] });
+    let userId: string;
+    let created = false;
+    if (existingList.data.length > 0) {
+      const existing = existingList.data[0]!;
+      userId = existing.id;
+      // Ensure password is set and email verified
+      try {
+        await clerkClient.users.updateUser(userId, {
+          password,
+          // @ts-ignore — Clerk types lag behind API
+          skipPasswordChecks: true,
+        });
+      } catch { /* password may already be set */ }
+      // Verify email addresses
+      for (const ea of existing.emailAddresses) {
+        if (ea.emailAddress.toLowerCase() === email.toLowerCase() && ea.verification?.status !== "verified") {
+          try { await (clerkClient as any).emailAddresses.updateEmailAddress(ea.id, { verified: true }); } catch { /* ignore */ }
+        }
+      }
+    } else {
+      const createdUser = await clerkClient.users.createUser({
+        emailAddress: [email],
+        password,
+        firstName: firstName ?? email.split("@")[0]!.split(".")[0],
+        lastName: lastName ?? "",
+        skipPasswordChecks: true,
+      } as any);
+      userId = createdUser.id;
+      created = true;
+    }
+
+    // If claim code provided, link the real userId to the seeded partner/account
+    if (targetCode) {
+      const [partner] = await db.select().from(partnersTable).where(eq(partnersTable.referralCode, targetCode));
+      if (partner && partner.clerkUserId.startsWith("mock_")) {
+        await db.update(partnersTable).set({ clerkUserId: userId }).where(eq(partnersTable.id, partner.id));
+        await db.update(accountsTable).set({ clerkUserId: userId }).where(eq(accountsTable.clerkUserId, `mock_${targetCode.toLowerCase()}`));
+      }
+    } else if (email.toLowerCase() === "rohitkatariya1820@gmail.com") {
+      // Auto-claim Rohit's IB on creation
+      const [rohitPartner] = await db.select().from(partnersTable).where(eq(partnersTable.referralCode, "VT-IB-IN-001"));
+      if (rohitPartner && rohitPartner.clerkUserId.startsWith("mock_")) {
+        await db.update(partnersTable).set({ clerkUserId: userId }).where(eq(partnersTable.id, rohitPartner.id));
+        await db.update(accountsTable).set({ clerkUserId: userId }).where(eq(accountsTable.clerkUserId, "mock_vt-ib-in-001"));
+      }
+    }
+
+    res.json({ ok: true, userId, email, created, login: "Use email + password on /sign-in (no OTP needed)" });
+  } catch (err: any) {
+    req.log.error({ err, email }, "create-user-bypass failed");
+    res.status(500).json({ error: err?.message ?? "Failed to create user" });
+  }
+});
+
 export default router;
