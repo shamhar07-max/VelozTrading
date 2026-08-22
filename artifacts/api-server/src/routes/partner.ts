@@ -1,21 +1,33 @@
+// Partner portal routes — implements docs/ib-sub-ib-programme.md (VEL-IB-SPEC-2026-R1).
+//
+// Replaces the legacy partner program. Removed by design:
+//   - hardcoded email→IB auto-claim and auto-provisioning hacks
+//   - auto-created withdrawal records / pre-loaded wallet figures
+//   - instant commission crediting (earnings now accrue PENDING and settle via
+//     the admin-approved monthly run — see lib/partnerProgram.ts)
+//
+// Attribution rules (spec §2): permanent once set; self-referral refused;
+// retroactive linking only within RETROACTIVE_ATTRIBUTION_WINDOW_DAYS of the
+// client account's creation, via the admin attribution endpoint.
+
 import { Router, type IRouter, type Request } from "express";
-import { eq, and, count, sql } from "drizzle-orm";
-import { getAuth, clerkClient } from "@clerk/express";
+import { eq, and, count, desc, inArray, sql } from "drizzle-orm";
+import { clerkClient } from "@clerk/express";
 import {
   db,
   accountsTable,
   partnersTable,
   referralsTable,
   partnerCommissionsTable,
-  withdrawalRequestsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { accountRateLimit } from "../middlewares/rateLimit";
 import { sendUserNotification, partnerNewReferralSignupHtml } from "../lib/notifications";
+import { RETROACTIVE_ATTRIBUTION_WINDOW_DAYS, canWithdraw } from "../lib/partnerProgramMath";
 
 const router: IRouter = Router();
 
-// ── Milestone thresholds → unlock percentages ──────────────────────────────
+// ── Milestone thresholds → unlock percentages (spec §3.4) ──────────────────
 const MILESTONES = [
   { depositors: 100, pct: 100 },
   { depositors: 50,  pct: 75  },
@@ -49,7 +61,24 @@ export async function recalcPartnerUnlock(
   return unlockedPct;
 }
 
-// GET /api/partner/me — returns stats for the authenticated partner (or admin)
+function referralLinkFor(req: Request, code: string): string {
+  const host = req.headers["x-forwarded-host"] ?? req.headers.host ?? "veloztrade.com";
+  const proto = req.headers["x-forwarded-proto"] ?? "https";
+  return `${proto}://${host}/sign-up?ref=${code}`;
+}
+
+async function sumCommissions(partnerId: number, sourceType?: string, state?: string): Promise<number> {
+  const conditions = [eq(partnerCommissionsTable.partnerId, partnerId)];
+  if (sourceType) conditions.push(eq(partnerCommissionsTable.sourceType, sourceType));
+  if (state) conditions.push(eq(partnerCommissionsTable.state, state));
+  const [row] = await db
+    .select({ total: sql<string>`COALESCE(SUM(${partnerCommissionsTable.amount}), 0)` })
+    .from(partnerCommissionsTable)
+    .where(and(...conditions));
+  return parseFloat(String(row?.total ?? "0"));
+}
+
+// GET /api/partner/me — dashboard stats for the authenticated partner
 router.get("/partner/me", requireAuth, async (req, res): Promise<void> => {
   const userId = (req as Request & { userId: string }).userId;
 
@@ -60,21 +89,16 @@ router.get("/partner/me", requireAuth, async (req, res): Promise<void> => {
 
   // Allow admin to query ?userId=... for any partner
   let targetPartner = partner;
-  if (!targetPartner) {
+  if (!targetPartner && req.query.userId) {
     try {
       const clerkUser = await clerkClient.users.getUser(userId);
-      const isAdmin = clerkUser.emailAddresses.some(
-        (e) => e.emailAddress === "shamhar07@gmail.com"
-      );
+      const isAdmin = clerkUser.publicMetadata?.role === "admin";
       if (isAdmin) {
-        const { userId: queryUserId } = req.query as { userId?: string };
-        if (queryUserId) {
-          const [p] = await db
-            .select()
-            .from(partnersTable)
-            .where(eq(partnersTable.clerkUserId, queryUserId));
-          targetPartner = p;
-        }
+        const [p] = await db
+          .select()
+          .from(partnersTable)
+          .where(eq(partnersTable.clerkUserId, String(req.query.userId)));
+        targetPartner = p;
       }
     } catch { /* ignore */ }
   }
@@ -102,41 +126,27 @@ router.get("/partner/me", requireAuth, async (req, res): Promise<void> => {
       eq(referralsTable.depositStatus, "active"),
     ));
 
-  const [cpaRow] = await db
-    .select({ total: sql<string>`COALESCE(SUM(amount::numeric), 0)` })
-    .from(partnerCommissionsTable)
-    .where(and(
-      eq(partnerCommissionsTable.partnerId, targetPartner.id),
-      eq(partnerCommissionsTable.sourceType, "cpa"),
-    ));
-
-  const [revRow] = await db
-    .select({ total: sql<string>`COALESCE(SUM(amount::numeric), 0)` })
-    .from(partnerCommissionsTable)
-    .where(and(
-      eq(partnerCommissionsTable.partnerId, targetPartner.id),
-      eq(partnerCommissionsTable.sourceType, "rev_share"),
-    ));
+  // Four-stream breakdown (spec §3) — settled vs pending
+  const [cpaEarned, revShareEarned, lotRebateEarned, overrideEarned] = await Promise.all([
+    sumCommissions(targetPartner.id, "cpa"),
+    sumCommissions(targetPartner.id, "rev_share"),
+    sumCommissions(targetPartner.id, "lot_rebate"),
+    sumCommissions(targetPartner.id, "parent_override"),
+  ]);
+  const pendingAmount = await sumCommissions(targetPartner.id, undefined, "pending");
 
   const totalReferrals = Number(totalReferralsRow?.cnt ?? 0);
   const depositingReferrals = Number(depositingRow?.cnt ?? 0);
-  const cpaEarned = parseFloat(String(cpaRow?.total ?? "0"));
-  const revShareEarned = parseFloat(String(revRow?.total ?? "0"));
   const seededCapital = parseFloat(String(targetPartner.seededCapital));
   const balance = parseFloat(String(account?.balance ?? "0"));
   const unlockedPct = targetPartner.capitalUnlockedPct;
   const commissionWallet = parseFloat(String(targetPartner.commissionWallet));
 
-  // Commission earnings are credited directly to accounts.balance when earned.
-  // commissionWallet is a display/audit running total, NOT a separate ledger.
-  // balance = seededCapital + tradingProfit + commissions (all in one pool).
-  // Locked principal = seededCapital × (1 − unlockedPct/100).
-  // Withdrawable = balance − lockedPrincipal (matches withdrawal enforcement logic).
+  // Commission earnings reach accounts.balance only when a run is approved.
+  // Locked principal = seededCapital × (1 − unlockedPct/100); withdrawable is the rest.
   const lockedPrincipal = seededCapital * (1 - unlockedPct / 100);
   const withdrawableBalance = Math.max(0, balance - lockedPrincipal);
   const unlockedPrincipal = seededCapital * (unlockedPct / 100);
-  // Display-only: trading profit estimate (balance above seeded, excluding commissions)
-  const tradingProfit = Math.max(0, balance - seededCapital - cpaEarned - revShareEarned);
 
   // Next milestone
   let nextMilestoneAt: number | null = null;
@@ -146,34 +156,40 @@ router.get("/partner/me", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
-  const host = req.headers["x-forwarded-host"] ?? req.headers.host ?? "veloztrade.com";
-  const proto = req.headers["x-forwarded-proto"] ?? "https";
-  const referralLink = `${proto}://${host}/sign-up?ref=${targetPartner.referralCode}`;
-
   res.json({
     id: targetPartner.id,
     name: targetPartner.name,
     referralCode: targetPartner.referralCode,
-    referralLink,
+    referralLink: referralLinkFor(req, targetPartner.referralCode),
     status: targetPartner.status,
+    parentPartnerId: targetPartner.parentPartnerId ?? null,
+    tier: targetPartner.tier,
+    legacyId: targetPartner.legacyId,
     seededCapital,
     cpaRate: parseFloat(String(targetPartner.cpaRate)),
     revSharePct: parseFloat(String(targetPartner.revSharePct)),
     totalReferrals,
     depositingReferrals,
-    cpaEarned,
-    revShareEarned,
-    tradingProfit: parseFloat(tradingProfit.toFixed(2)),
+    streams: {
+      cpaEarned: parseFloat(cpaEarned.toFixed(2)),
+      revShareEarned: parseFloat(revShareEarned.toFixed(2)),
+      lotRebateEarned: parseFloat(lotRebateEarned.toFixed(2)),
+      parentOverrideEarned: parseFloat(overrideEarned.toFixed(2)),
+      pendingAmount: parseFloat(pendingAmount.toFixed(2)),
+    },
+    cpaEarned: parseFloat(cpaEarned.toFixed(2)),
+    revShareEarned: parseFloat(revShareEarned.toFixed(2)),
     capitalUnlockedPct: unlockedPct,
     commissionWallet: parseFloat(commissionWallet.toFixed(2)),
     withdrawableBalance: parseFloat(withdrawableBalance.toFixed(2)),
+    withdrawalsEnabled: canWithdraw(targetPartner.status),
     nextMilestoneAt,
     balance: parseFloat(balance.toFixed(2)),
     createdAt: targetPartner.createdAt,
   });
 });
 
-// GET /api/partner/me/commissions — audit trail
+// GET /api/partner/me/commissions — full audit trail incl. run state
 router.get("/partner/me/commissions", requireAuth, async (req, res): Promise<void> => {
   const userId = (req as Request & { userId: string }).userId;
 
@@ -191,19 +207,24 @@ router.get("/partner/me/commissions", requireAuth, async (req, res): Promise<voi
     .select()
     .from(partnerCommissionsTable)
     .where(eq(partnerCommissionsTable.partnerId, partner.id))
-    .orderBy(partnerCommissionsTable.createdAt);
+    .orderBy(desc(partnerCommissionsTable.createdAt))
+    .limit(500);
 
   res.json(rows.map((r) => ({
     id: r.id,
     sourceType: r.sourceType,
     amount: parseFloat(String(r.amount)),
+    state: r.state,
+    runMonth: r.runMonth ?? null,
+    lots: r.lots != null ? parseFloat(String(r.lots)) : null,
+    reason: r.reason ?? null,
     refPositionId: r.refPositionId ?? null,
     refClerkUserId: r.refClerkUserId ?? null,
     createdAt: r.createdAt,
   })));
 });
 
-// GET /api/partner/referral-code — public: look up a partner by referral code
+// GET /api/partner/referral-code/:code — public lookup of an active partner by code
 router.get("/partner/referral-code/:code", async (req, res): Promise<void> => {
   const code = (req.params.code as string).toUpperCase();
   const [partner] = await db
@@ -222,7 +243,9 @@ router.get("/partner/referral-code/:code", async (req, res): Promise<void> => {
   res.json({ id: partner.id, name: partner.name, referralCode: partner.referralCode });
 });
 
-// POST /api/partner/register-ref — called on first account load when ?ref= was in URL
+// POST /api/partner/register-ref — first-load attribution when ?ref= was present at signup.
+// Permanent per spec §2; allowed only while the client account is inside the retroactive
+// window measured from account creation.
 router.post("/partner/register-ref", requireAuth, accountRateLimit, async (req, res): Promise<void> => {
   const userId = (req as Request & { userId: string }).userId;
   const { code, referralCode } = req.body as { code?: string; referralCode?: string };
@@ -258,13 +281,21 @@ router.post("/partner/register-ref", requireAuth, accountRateLimit, async (req, 
     return;
   }
 
-  // Don't overwrite if already referred
+  // Don't overwrite existing attribution — it is permanent (spec §2).
   if (account.referredByPartnerId) {
     res.json({ ok: true, alreadySet: true });
     return;
   }
 
-  // Don't allow partner to refer themselves
+  // Retroactive window: signup links resolve on first load anyway, but guard against
+  // stale clients trying to claim attribution long after registration.
+  const ageDays = (Date.now() - new Date(account.createdAt).getTime()) / 86_400_000;
+  if (ageDays > RETROACTIVE_ATTRIBUTION_WINDOW_DAYS) {
+    res.status(400).json({ error: "Attribution window has expired. Contact support." });
+    return;
+  }
+
+  // Self-referral prohibition (spec §7)
   if (partner.clerkUserId === userId) {
     res.status(400).json({ error: "Self-referral is not permitted." });
     return;
@@ -302,7 +333,7 @@ router.post("/partner/register-ref", requireAuth, accountRateLimit, async (req, 
     if (partnerEmail) {
       void sendUserNotification(
         partnerEmail,
-        "🙋 New Referral Sign-Up — VelozTrade",
+        "New Referral Sign-Up — VelozTrade",
         partnerNewReferralSignupHtml(partner.name, newUserEmail, totalReferrals),
       );
     }
@@ -311,129 +342,63 @@ router.post("/partner/register-ref", requireAuth, accountRateLimit, async (req, 
   res.json({ ok: true });
 });
 
-// ── IB Panel — for top-level IBs (parentPartnerId is null) ──────────────────
+// ── IB Panel — top-level IBs (parentPartnerId is null) ──────────────────────
+
+async function findPartnerForUser(userId: string) {
+  const [partner] = await db.select().from(partnersTable).where(eq(partnersTable.clerkUserId, userId));
+  return partner ?? null;
+}
+
 router.get("/ib/me", requireAuth, async (req, res): Promise<void> => {
   const userId = (req as Request & { userId: string }).userId;
-  let clerkEmail: string | null = null;
-  try { const u = await clerkClient.users.getUser(userId); clerkEmail = u.emailAddresses[0]?.emailAddress ?? null; } catch { /* ignore */ }
+  const partner = await findPartnerForUser(userId);
 
-  // 1) Direct lookup by clerkUserId
-  let [partner] = await db.select().from(partnersTable).where(eq(partnersTable.clerkUserId, userId));
-
-  // 2) Fallback: claim seeded IB by email (rohitkatariya1820@gmail.com → VT-IB-IN-001)
-  // This auto-migrates the mock placeholder to the real Clerk user on first login.
-  if (!partner && clerkEmail) {
-    const emailLower = clerkEmail.toLowerCase();
-    let targetCode: string | null = null;
-    if (emailLower === "rohitkatariya1820@gmail.com") targetCode = "VT-IB-IN-001";
-
-    if (targetCode) {
-      const [seeded] = await db.select().from(partnersTable).where(eq(partnersTable.referralCode, targetCode));
-      if (seeded) {
-        if (seeded.clerkUserId.startsWith("mock_")) {
-          await db.update(partnersTable).set({ clerkUserId: userId }).where(eq(partnersTable.id, seeded.id));
-          await db.update(accountsTable).set({ clerkUserId: userId }).where(eq(accountsTable.clerkUserId, `mock_${targetCode.toLowerCase()}`));
-          partner = { ...seeded, clerkUserId: userId } as any;
-        } else if (seeded.clerkUserId === userId) {
-          partner = seeded;
-        } else {
-          partner = seeded;
-        }
-      } else if (emailLower === "rohitkatariya1820@gmail.com" && targetCode === "VT-IB-IN-001") {
-        // Auto-create Rohit's IB if DB was never seeded — ensures panel is visible on first login
-        const [newPartner] = await db.insert(partnersTable).values({
-          clerkUserId: userId,
-          name: "Rohit Kumar Ramesh Chand",
-          referralCode: "VT-IB-IN-001",
-          legacyId: "VELIBIN1810001",
-          seededCapital: "50000",
-          cpaRate: "50.00",
-          revSharePct: "0.3000",
-          capitalUnlockedPct: 50,
-          commissionWallet: "18450.00",
-          status: "active",
-          tier: "tier1",
-        }).returning();
-        // Ensure account exists
-        const [existingAcc] = await db.select().from(accountsTable).where(eq(accountsTable.clerkUserId, userId));
-        if (!existingAcc) {
-          await db.insert(accountsTable).values({
-            clerkUserId: userId,
-            balance: "48750.00",
-            demoBalance: "10000.00",
-            isDemoMode: false,
-            currency: "USD",
-            leverage: 200,
-            accountType: "real",
-            kycStatus: "verified",
-            mockName: "Rohit Kumar Ramesh Chand",
-            mockEmail: "rohitkatariya1820@gmail.com",
-            isMock: false,
-          });
-        }
-        // Create the approved withdrawal record if missing — INR 275,000 at today's rate ₹95.69 ≈ $2,874
-        const [existingWd] = await db.select().from(withdrawalRequestsTable).where(eq(withdrawalRequestsTable.clerkUserId, userId));
-        if (!existingWd) {
-          await db.insert(withdrawalRequestsTable).values({
-            clerkUserId: userId,
-            amount: "2874.00",
-            method: "bank",
-            bankDetails: "Beneficiary: Rohit Kumar Ramesh Chand — INR 275,000 (≈ $2,874 USD @ ₹95.69) IB commission withdrawal — credited to registered bank on file",
-            status: "approved",
-            notes: "INR 275,000 (~$2,874 @ ₹95.69 on 22 Aug 2026) — IB commission payout for $3.2M book",
-          });
-        } else if (existingWd.amount !== "2874.00") {
-          await db.update(withdrawalRequestsTable).set({ amount: "2874.00", bankDetails: "Beneficiary: Rohit Kumar Ramesh Chand — INR 275,000 (≈ $2,874 USD @ ₹95.69) IB commission withdrawal — credited to registered bank on file", notes: "INR 275,000 (~$2,874 @ ₹95.69 on 22 Aug 2026) — updated to today's rate" }).where(eq(withdrawalRequestsTable.id, existingWd.id));
-        }
-        partner = newPartner as any;
-      }
-    }
-  }
-
-  if (!partner || (partner as any).parentPartnerId) {
+  if (!partner || partner.parentPartnerId != null) {
     res.status(404).json({ error: "No IB account found for this user." });
     return;
   }
 
-  // Gather IB stats: direct clients + sub-IBs + sub-IB clients
   const subIbs = await db.select().from(partnersTable).where(eq(partnersTable.parentPartnerId, partner.id));
-  const subIbIds = subIbs.map(s => s.id);
-  const allPartnerIds = [partner.id, ...subIbIds];
+  const allPartnerIds = [partner.id, ...subIbs.map(s => s.id)];
 
-  let totalClients = 0; let totalAum = 0;
-  for (const pid of allPartnerIds) {
-    const [cnt] = await db.select({ cnt: count() }).from(referralsTable).where(eq(referralsTable.partnerId, pid));
-    totalClients += Number(cnt?.cnt ?? 0);
-    const [sum] = await db.select({ total: sql<string>`COALESCE(SUM(balance::numeric),0)` }).from(accountsTable).where(eq(accountsTable.referredByPartnerId, pid));
-    totalAum += parseFloat(String(sum?.total ?? "0"));
-  }
+  const [clientCnt] = await db
+    .select({ cnt: count() })
+    .from(referralsTable)
+    .where(inArray(referralsTable.partnerId, allPartnerIds));
+  const [aumRow] = await db
+    .select({ total: sql<string>`COALESCE(SUM(balance::numeric),0)` })
+    .from(accountsTable)
+    .where(inArray(accountsTable.referredByPartnerId, allPartnerIds));
 
   res.json({
     id: partner.id,
     name: partner.name,
     referralCode: partner.referralCode,
-    legacyId: (partner as any).legacyId,
-    tier: (partner as any).tier,
-    seededCapital: parseFloat(String(partner.seededCapital)),
+    legacyId: partner.legacyId,
+    tier: partner.tier,
     status: partner.status,
-    totalClients,
-    totalAum: parseFloat(totalAum.toFixed(2)),
-    subIbs: subIbs.map(s => ({ id: s.id, name: s.name, referralCode: s.referralCode, legacyId: (s as any).legacyId })),
+    seededCapital: parseFloat(String(partner.seededCapital)),
+    totalClients: Number(clientCnt?.cnt ?? 0),
+    totalAum: parseFloat(String(aumRow?.total ?? "0")),
     subIbCount: subIbs.length,
+    subIbs: subIbs.map(s => ({
+      id: s.id,
+      name: s.name,
+      referralCode: s.referralCode,
+      legacyId: s.legacyId,
+      status: s.status,
+    })),
   });
 });
 
-// GET /api/ib/clients — detailed client list for the IB (including sub-IB clients if ?includeSubIbs=true)
+// GET /api/ib/clients — the IB's book (own + sub-IB desks unless ?includeSubIbs=false)
 router.get("/ib/clients", requireAuth, async (req, res): Promise<void> => {
   const userId = (req as Request & { userId: string }).userId;
-  let clerkEmail: string | null = null;
-  try { const u = await clerkClient.users.getUser(userId); clerkEmail = u.emailAddresses[0]?.emailAddress ?? null; } catch { /* ignore */ }
-  let [partner] = await db.select().from(partnersTable).where(eq(partnersTable.clerkUserId, userId));
-  if (!partner && clerkEmail?.toLowerCase() === "rohitkatariya1820@gmail.com") {
-    const [seeded] = await db.select().from(partnersTable).where(eq(partnersTable.referralCode, "VT-IB-IN-001"));
-    if (seeded) partner = seeded;
+  const partner = await findPartnerForUser(userId);
+  if (!partner || partner.parentPartnerId != null) {
+    res.status(404).json({ error: "No IB account found." });
+    return;
   }
-  if (!partner || (partner as any).parentPartnerId) { res.status(404).json({ error: "No IB account found." }); return; }
 
   const includeSub = req.query.includeSubIbs !== "false";
   const subIbs = includeSub ? await db.select().from(partnersTable).where(eq(partnersTable.parentPartnerId, partner.id)) : [];
@@ -443,33 +408,41 @@ router.get("/ib/clients", requireAuth, async (req, res): Promise<void> => {
   const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? "50"), 10) || 50));
   const offset = (page - 1) * limit;
 
-  // Fetch referrals for all relevant partnerIds
-  const allReferrals: typeof referralsTable.$inferSelect[] = [];
-  for (const pid of allIds) {
-    const rows = await db.select().from(referralsTable).where(eq(referralsTable.partnerId, pid));
-    allReferrals.push(...rows);
-  }
-  // Sort by most recent
-  allReferrals.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const allReferrals = await db
+    .select()
+    .from(referralsTable)
+    .where(inArray(referralsTable.partnerId, allIds))
+    .orderBy(desc(referralsTable.createdAt));
+
   const paged = allReferrals.slice(offset, offset + limit);
   const clerkIds = paged.map(r => r.referredClerkUserId);
-  const accounts = clerkIds.length > 0 ? await db.select().from(accountsTable).where(sql`${accountsTable.clerkUserId} IN ${clerkIds}`) : [];
+  const accounts = clerkIds.length > 0
+    ? await db.select().from(accountsTable).where(inArray(accountsTable.clerkUserId, clerkIds))
+    : [];
   const accByClerk = new Map(accounts.map(a => [a.clerkUserId, a]));
+  const codeById = new Map<number, string>([
+    [partner.id, partner.referralCode],
+    ...subIbs.map(s => [s.id, s.referralCode] as const),
+  ]);
+
+  // Masked identifiers for privacy (spec §7): partners see masked IDs, not raw emails.
+  function mask(id: string): string {
+    return id.length > 8 ? `${id.slice(0, 5)}…${id.slice(-3)}` : id;
+  }
 
   const clients = paged.map(r => {
-    const acc: any = accByClerk.get(r.referredClerkUserId);
-    const ibCode = allIds.includes(r.partnerId) ? (r.partnerId === partner!.id ? partner!.referralCode : subIbs.find(s => s.id === r.partnerId)?.referralCode ?? partner!.referralCode) : partner!.referralCode;
+    const acc = accByClerk.get(r.referredClerkUserId);
     return {
-      clerkUserId: r.referredClerkUserId,
-      name: acc?.mockName ?? acc?.clerkUserId ?? r.referredClerkUserId,
-      email: acc?.mockEmail ?? "—",
+      clerkUserId: mask(r.referredClerkUserId),
+      name: acc ? mask(`${acc.mockName ?? ""}${acc.clerkUserId}`.trim() || acc.clerkUserId) : mask(r.referredClerkUserId),
+      email: acc?.mockEmail ? mask(acc.mockEmail.split("@")[0]!) + "@…" : "—",
       balance: acc ? parseFloat(String(acc.balance)) : 0,
       demoBalance: acc ? parseFloat(String(acc.demoBalance)) : 0,
       accountType: acc?.accountType ?? "real",
       kycStatus: acc?.kycStatus ?? "unverified",
       leverage: acc?.leverage ?? 100,
       currency: acc?.currency ?? "USD",
-      referredBy: ibCode,
+      referredBy: codeById.get(r.partnerId) ?? partner.referralCode,
       depositStatus: r.depositStatus,
       cpaPaid: r.cpaPaid,
       createdAt: r.createdAt,
@@ -479,35 +452,36 @@ router.get("/ib/clients", requireAuth, async (req, res): Promise<void> => {
   res.json({ total: allReferrals.length, page, limit, clients });
 });
 
-// ── Sub-IB Panel — for sub desks (parentPartnerId not null) ─────────────────
+// ── Sub-IB Panel — desks (parentPartnerId not null) ─────────────────────────
+
 router.get("/sub-ib/me", requireAuth, async (req, res): Promise<void> => {
   const userId = (req as Request & { userId: string }).userId;
-  const [partner] = await db.select().from(partnersTable).where(eq(partnersTable.clerkUserId, userId));
-  if (!partner || !(partner as any).parentPartnerId) {
+  const partner = await findPartnerForUser(userId);
+  if (!partner || partner.parentPartnerId == null) {
     res.status(404).json({ error: "No Sub-IB account found for this user." });
     return;
   }
-  const [parent] = await db.select().from(partnersTable).where(eq(partnersTable.id, (partner as any).parentPartnerId));
+  const [parent] = await db.select().from(partnersTable).where(eq(partnersTable.id, partner.parentPartnerId));
   const [clientCnt] = await db.select({ cnt: count() }).from(referralsTable).where(eq(referralsTable.partnerId, partner.id));
-  const [aumRow] = await db.select({ total: sql<string>`COALESCE(SUM(balance::numeric),0)` }).from(accountsTable).where(eq(accountsTable.referredByPartnerId, partner.id));
+  const [aumRow] = await db
+    .select({ total: sql<string>`COALESCE(SUM(balance::numeric),0)` })
+    .from(accountsTable)
+    .where(eq(accountsTable.referredByPartnerId, partner.id));
+
   res.json({
     id: partner.id,
     name: partner.name,
     referralCode: partner.referralCode,
-    legacyId: (partner as any).legacyId,
+    legacyId: partner.legacyId,
+    status: partner.status,
     parent: parent ? { id: parent.id, name: parent.name, referralCode: parent.referralCode } : null,
     totalClients: Number(clientCnt?.cnt ?? 0),
     totalAum: parseFloat(String(aumRow?.total ?? "0")),
     seededCapital: parseFloat(String(partner.seededCapital)),
-    status: partner.status,
   });
 });
 
 // GET /api/referral/stats — basic referral stats for any authenticated user
-// Returns live referral code + referred-user count.
-// Partners get their actual partner code and depositing referral count.
-// Regular users get a deterministic code (VT-<userId>) and count of any
-// referrals recorded against that code (typically 0 until they become a partner).
 router.get("/referral/stats", requireAuth, async (req, res): Promise<void> => {
   const userId = (req as Request & { userId: string }).userId;
 
@@ -522,26 +496,18 @@ router.get("/referral/stats", requireAuth, async (req, res): Promise<void> => {
       .from(referralsTable)
       .where(eq(referralsTable.partnerId, partner.id));
 
-    const host = req.headers["x-forwarded-host"] ?? req.headers.host ?? "veloztrade.com";
-    const proto = req.headers["x-forwarded-proto"] ?? "https";
-    const referralLink = `${proto}://${host}/sign-up?ref=${partner.referralCode}`;
-
     res.json({
       isPartner: true,
       referralCode: partner.referralCode,
-      referralLink,
+      referralLink: referralLinkFor(req, partner.referralCode),
       referredCount: Number(refCount?.cnt ?? 0),
     });
     return;
   }
 
-  // Non-partner: generate a deterministic code from the Clerk user ID
+  // Non-partner: deterministic placeholder code
   const code = `VT-${userId.replace(/^user_/, "").toUpperCase().slice(0, 10)}`;
-  const host = req.headers["x-forwarded-host"] ?? req.headers.host ?? "veloztrade.com";
-  const proto = req.headers["x-forwarded-proto"] ?? "https";
-  const referralLink = `${proto}://${host}/sign-up?ref=${code}`;
 
-  // Count any referrals recorded for partners whose code matches (should be 0 for non-partners)
   const [partnerWithCode] = await db
     .select({ id: partnersTable.id })
     .from(partnersTable)
@@ -556,7 +522,12 @@ router.get("/referral/stats", requireAuth, async (req, res): Promise<void> => {
     referredCount = Number(rc?.cnt ?? 0);
   }
 
-  res.json({ isPartner: false, referralCode: code, referralLink, referredCount });
+  res.json({
+    isPartner: false,
+    referralCode: code,
+    referralLink: referralLinkFor(req, code),
+    referredCount,
+  });
 });
 
 export default router;

@@ -85,8 +85,6 @@ export function IbPanel() {
   if (isLoading) return <div className="max-w-6xl mx-auto p-6 space-y-4"><Skeleton className="h-32 w-full rounded-2xl"/><Skeleton className="h-64 w-full rounded-2xl"/></div>;
   if (!data) return null;
 
-  const isRohit = data.referralCode === "VT-IB-IN-001";
-
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -95,7 +93,7 @@ export function IbPanel() {
             <Building2 className="w-7 h-7 text-primary"/> IB Panel
             <span className="text-xs font-bold px-2.5 py-1 rounded-full border border-emerald-400/30 bg-emerald-400/10 text-emerald-400">ACTIVE</span>
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">{data.name} · {data.referralCode} {data.legacyId && `· ${data.legacyId}`} · {isRohit ? "India" : ""}</p>
+          <p className="text-sm text-muted-foreground mt-1">{data.name} · {data.referralCode}{data.legacyId ? ` · ${data.legacyId}` : ""}</p>
         </div>
         <div className="text-right">
           <div className="text-xs text-muted-foreground">Tier</div>
@@ -113,22 +111,7 @@ export function IbPanel() {
         <div className="glass-card rounded-2xl p-5 border border-border">
           <TrendingUp className="w-4 h-4 text-amber-400 mb-3"/><div className="text-xs text-muted-foreground uppercase">Seeded Capital</div><div className="text-2xl font-black font-mono">${fmt(data.seededCapital)}</div><div className="text-xs text-muted-foreground mt-1">{data.subIbCount} sub-desks</div>
         </div>
-        <div className="glass-card rounded-2xl p-5 border border-border">
-          <BarChart3 className="w-4 h-4 text-primary mb-3"/><div className="text-xs text-muted-foreground uppercase">Est. Monthly Volume</div><div className="text-2xl font-black font-mono">5,800 lots</div><div className="text-xs text-muted-foreground mt-1">Network avg</div>
-        </div>
       </div>
-
-      {isRohit && (
-        <div className="glass-card rounded-2xl border border-primary/20 p-6 bg-primary/5">
-          <h2 className="font-bold flex items-center gap-2"><Award className="w-5 h-5 text-primary"/> Rohit K. R. Chand — Account Summary</h2>
-          <div className="grid sm:grid-cols-3 gap-4 mt-4 text-sm">
-            <div><div className="text-xs text-muted-foreground">Fund Through Clients</div><div className="text-xl font-black font-mono text-foreground">$3,200,000.00</div><div className="text-xs text-muted-foreground">26 active clients</div></div>
-            <div><div className="text-xs text-muted-foreground">Commission Earned</div><div className="text-xl font-black font-mono text-emerald-400">$18,450.00</div><div className="text-xs text-muted-foreground">CPA + Rev Share + Override</div></div>
-            <div><div className="text-xs text-muted-foreground">Withdrawal Processed</div><div className="text-xl font-black font-mono text-foreground">$2,874.00</div><div className="text-xs text-muted-foreground">INR 275,000 @ ₹95.69 (22 Aug 2026) · Approved · Bank Wire</div></div>
-          </div>
-          <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground"><ShieldCheck className="w-4 h-4 text-emerald-400"/>FSCA License No. 51748 · Segregated accounts · 24–48h withdrawal SLA</div>
-        </div>
-      )}
 
       <div className="glass-card rounded-2xl border border-border p-6">
         <h2 className="font-bold flex items-center gap-2"><Layers className="w-5 h-5 text-primary"/> Sub-IB Desks ({data.subIbCount})</h2>
@@ -145,11 +128,15 @@ export function IbPanel() {
       </div>
 
       <div className="glass-card rounded-2xl border border-border p-6">
-        <h2 className="font-bold flex items-center gap-2"><ArrowDownToLine className="w-5 h-5 text-primary"/> Recent Withdrawal</h2>
-        <div className="mt-4 p-4 rounded-xl bg-muted/20 border border-border flex items-center justify-between flex-wrap gap-3">
-          <div><div className="font-mono font-bold">$2,874.00 <span className="text-xs font-normal text-muted-foreground">(INR 275,000 @ ₹95.69 — 22 Aug 2026)</span></div><div className="text-xs text-muted-foreground">Bank Wire · Approved · {isRohit ? "rohitkatariya1820@gmail.com" : data.referralCode}</div></div>
-          <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-400/10 text-emerald-400 border border-emerald-400/30">APPROVED</span>
-        </div>
+        <h2 className="font-bold flex items-center gap-2"><ArrowDownToLine className="w-5 h-5 text-primary"/> Commissions &amp; Payouts</h2>
+        <p className="text-sm text-muted-foreground mt-3">
+          Lot rebates, parent overrides, CPA bonuses and revenue share accrue as pending lines and are
+          settled in the monthly commission run after reconciliation and approval. Approved amounts appear
+          in your withdrawable balance; payouts process within 24&ndash;48 hours of request.
+        </p>
+        {data.status !== "active" && (
+          <p className="mt-3 text-sm text-amber-400">Partner status: {data.status} — new accruals are paused while not active.</p>
+        )}
       </div>
 
       <IbClientsTable />

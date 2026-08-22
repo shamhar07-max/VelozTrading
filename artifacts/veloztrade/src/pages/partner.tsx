@@ -23,7 +23,9 @@ interface PartnerMe {
   depositingReferrals: number;
   cpaEarned: number;
   revShareEarned: number;
-  tradingProfit: number;
+  lotRebateEarned: number;
+  parentOverrideEarned: number;
+  pendingAmount: number;
   capitalUnlockedPct: number;
   commissionWallet: number;
   withdrawableBalance: number;
@@ -36,6 +38,10 @@ interface Commission {
   id: number;
   sourceType: string;
   amount: number;
+  state: "pending" | "approved" | "reversed";
+  runMonth: string | null;
+  lots: number | null;
+  reason: string | null;
   refPositionId: number | null;
   refClerkUserId: string | null;
   createdAt: string;
@@ -49,15 +55,19 @@ const MILESTONES = [
 ];
 
 const SOURCE_LABELS: Record<string, string> = {
-  cpa:            "CPA Bonus",
-  rev_share:      "Revenue Share",
-  trading_profit: "Trading Profit",
+  cpa:             "CPA Bonus",
+  rev_share:       "Revenue Share",
+  lot_rebate:      "Lot Rebate",
+  parent_override: "Parent Override",
+  adjustment:      "Adjustment",
 };
 
 const SOURCE_COLORS: Record<string, string> = {
-  cpa:            "bg-emerald-400/10 text-emerald-400",
-  rev_share:      "bg-primary/10 text-primary",
-  trading_profit: "bg-amber-400/10 text-amber-400",
+  cpa:             "bg-emerald-400/10 text-emerald-400",
+  rev_share:       "bg-primary/10 text-primary",
+  lot_rebate:      "bg-sky-400/10 text-sky-400",
+  parent_override: "bg-violet-400/10 text-violet-400",
+  adjustment:      "bg-amber-400/10 text-amber-400",
 };
 
 function fmt(n: number) {
@@ -185,7 +195,7 @@ function MilestoneTracker({ partner }: { partner: PartnerMe }) {
 }
 
 function EarningsBreakdown({ partner, commissions }: { partner: PartnerMe; commissions: Commission[] }) {
-  const [activeTab, setActiveTab] = useState<"cpa" | "rev_share" | "trading">("cpa");
+  const [activeTab, setActiveTab] = useState<"cpa" | "rev_share" | "lot_rebate" | "parent_override">("cpa");
 
   const streams = [
     {
@@ -207,13 +217,22 @@ function EarningsBreakdown({ partner, commissions }: { partner: PartnerMe; commi
       sourceType: "rev_share",
     },
     {
-      id: "trading" as const,
-      label: "Trading Profits",
+      id: "lot_rebate" as const,
+      label: "Lot Rebate",
       icon: TrendingUp,
-      total: partner.tradingProfit,
-      color: "text-amber-400",
-      desc: "70% of your own trading P&L (platform keeps 30%)",
-      sourceType: "trading_profit",
+      total: partner.lotRebateEarned,
+      color: "text-sky-400",
+      desc: "Fixed USD per standard lot traded by your referred clients, tiered by monthly network volume",
+      sourceType: "lot_rebate",
+    },
+    {
+      id: "parent_override" as const,
+      label: "Parent Override",
+      icon: Award,
+      total: partner.parentOverrideEarned,
+      color: "text-violet-400",
+      desc: "$3.00 per lot on all client volume traded by desks under you (IBs only)",
+      sourceType: "parent_override",
     },
   ];
 

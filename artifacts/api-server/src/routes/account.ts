@@ -6,6 +6,7 @@ import { GetAccountResponse } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { accountRateLimit, depositRateLimit } from "../middlewares/rateLimit";
 import { recordTransaction } from "../lib/ledger";
+import { canWithdraw } from "../lib/partnerProgramMath";
 import { listPositions as fetchPositions } from "./positions";
 import { getPrice } from "../lib/twelvedata";
 import { INSTRUMENT_MAP, LEVERAGE_BY_TYPE } from "../lib/instruments";
@@ -290,6 +291,17 @@ router.post("/account/withdrawal-request", requireAuth, depositRateLimit, async 
     .where(eq(partnersTable.clerkUserId, userId));
 
   if (ownPartner) {
+    // Lifecycle gate (VEL-IB-SPEC-2026-R1 §8): only active partners (and dormant
+    // partners draining their wallet) may withdraw. Suspended/terminated cannot.
+    if (!canWithdraw(ownPartner.status)) {
+      res.status(403).json({
+        error: `Your partner account is currently '${ownPartner.status}'. Withdrawals are unavailable in this state. Contact support.`,
+        partnerStatusBlocked: true,
+        partnerStatus: ownPartner.status,
+      });
+      return;
+    }
+
     const seededCapital = parseFloat(String(ownPartner.seededCapital));
     const balance = parseFloat(String(account.balance));
     const lockedPrincipal = seededCapital * (1 - ownPartner.capitalUnlockedPct / 100);

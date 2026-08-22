@@ -17,7 +17,7 @@ Full-stack retail trading platform (forex · crypto · stocks · commodities · 
 - **Immutable financial ledger** (`transactions` table) — every balance mutation writes an append-only audit row in the same transaction (Peatio-style account versioning): deposits, withdrawal holds/refunds, commissions, trade PnL, swaps, stop-outs, CPA/rev-share, admin adjustments
 
 **Growth / ops**
-- Partner program: referral codes, CPA bonuses, commission revenue share, 70/30 profit split, milestone capital unlocks
+- Partner program: referral codes, CPA bonuses (≥$250 qualifying deposit), tiered lot rebates + $3 parent override, revenue share, seeded-capital milestone unlocks, pending→approved commission runs with clawbacks — full IB/Sub-IB specification in [docs/ib-sub-ib-programme.md](./docs/ib-sub-ib-programme.md)
 - Admin back office: users, balances, KYC review, deposit/withdrawal queues, force-close positions, partner management, ledger audit view
 - Clerk authentication, Resend transactional email, Tawk live chat, WalletConnect wallet linking
 

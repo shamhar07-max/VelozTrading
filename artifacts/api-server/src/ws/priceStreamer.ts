@@ -6,6 +6,7 @@ import { INSTRUMENTS, TIER_CONFIG, isMarketOpen } from "../lib/instruments";
 import { getBatchPrices, getBatchQuotes, setPriceCacheRef } from "../lib/twelvedata";
 import { getOmniBatchPrices, getOmniBatchQuotes } from "../lib/omniPrice";
 import { db, positionsTable, ordersTable, accountsTable, pendingOrdersTable, alertsTable, priceSnapshotsTable } from "@workspace/db";
+import { accrueForClosedPosition } from "../lib/partnerProgram";
 import { eq, sql, and } from "drizzle-orm";
 import { clerkClient } from "@clerk/express";
 import { sendUserNotification, priceAlertHtml } from "../lib/notifications";
@@ -160,6 +161,15 @@ async function checkSlTpTriggers() {
             refId: pos.id,
             description: `${reason} — ${pos.symbol} @ ${execPrice}`,
           });
+
+          // IB/Sub-IB commission accrual on SL/TP auto-close (spec §4)
+          if (!pos.isDemo) {
+            await accrueForClosedPosition(tx, {
+              positionId: pos.id,
+              clientId: pos.clerkUserId,
+              lots: parseFloat(String(pos.volume)),
+            });
+          }
         });
 
         logger.info({ positionId: pos.id, symbol: pos.symbol, reason, profit: profit.toFixed(2) },
@@ -482,6 +492,15 @@ async function checkMarginCalls() {
                 refId: worstPos.id,
                 description: `Stop-out — ${worstPos.symbol} @ ${closePrice} (margin level ${marginLevel.toFixed(1)}%)`,
               });
+
+              // IB/Sub-IB commission accrual on stop-out close (spec §4)
+              if (!isDemo) {
+                await accrueForClosedPosition(tx, {
+                  positionId: worstPos.id,
+                  clientId: worstPos.clerkUserId,
+                  lots: volume,
+                });
+              }
             });
 
             currentBalance += profit;

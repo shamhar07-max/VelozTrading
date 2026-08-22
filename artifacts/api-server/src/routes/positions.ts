@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request } from "express";
 import { eq, and, sql } from "drizzle-orm";
-import { db, positionsTable, ordersTable, accountsTable, partnersTable, partnerCommissionsTable } from "@workspace/db";
+import { db, positionsTable, ordersTable, accountsTable } from "@workspace/db";
 import {
   ListPositionsResponse,
   GetPositionResponse,
@@ -19,6 +19,7 @@ import { getOrCreateAccount } from "./account";
 import { getPrice } from "../lib/twelvedata";
 import { INSTRUMENT_MAP, LEVERAGE_BY_TYPE, TIER_CONFIG } from "../lib/instruments";
 import { recordTransaction } from "../lib/ledger";
+import { accrueForClosedPosition } from "../lib/partnerProgram";
 
 const router: IRouter = Router();
 
@@ -232,51 +233,9 @@ router.post("/positions", requireAuth, tradingRateLimit, async (req, res): Promi
           description: `Open commission — ${symbol} ${direction} ${volume} lots`,
         });
 
-        // ── Revenue-share trigger (real trades only) ────────────────────
-        if (account.referredByPartnerId) {
-          const [partner] = await tx
-            .select()
-            .from(partnersTable)
-            .where(eq(partnersTable.id, account.referredByPartnerId));
-
-          if (partner && partner.status === "active") {
-            const revShareAmt = commission * parseFloat(String(partner.revSharePct));
-            if (revShareAmt > 0) {
-              await tx
-                .update(partnersTable)
-                .set({ commissionWallet: sql`commission_wallet + ${revShareAmt.toFixed(2)}::numeric` })
-                .where(eq(partnersTable.id, partner.id));
-
-              await tx
-                .insert(partnerCommissionsTable)
-                .values({
-                  partnerId: partner.id,
-                  sourceType: "rev_share",
-                  amount: revShareAmt.toFixed(2),
-                  refPositionId: pos.id,
-                  refClerkUserId: userId,
-                });
-
-              // Credit rev-share earnings into the partner's account balance
-              // so they are immediately withdrawable. commissionWallet tracks
-              // the cumulative total for display purposes.
-              await tx
-                .update(accountsTable)
-                .set({ balance: sql`balance + ${revShareAmt.toFixed(2)}::numeric` })
-                .where(eq(accountsTable.clerkUserId, partner.clerkUserId));
-
-              await recordTransaction(tx, {
-                clerkUserId: partner.clerkUserId,
-                type: "partner_rev_share",
-                amount: revShareAmt.toFixed(2),
-                isDemo: false,
-                refType: "position",
-                refId: pos.id,
-                description: `Revenue share (${(parseFloat(String(partner.revSharePct)) * 100).toFixed(1)}% of commission) — referred trader ${userId}`,
-              });
-            }
-          }
-        }
+        // IB/Sub-IB commissions are NOT credited at trade open. Lot rebates and
+        // parent overrides accrue as PENDING lines when a trade CLOSES (spec §4)
+        // and reach the partner only via the approved monthly run.
       }
     }
   });
@@ -459,24 +418,9 @@ router.delete("/positions/:id", requireAuth, tradingRateLimit, async (req, res):
         description: `Close ${pos.symbol} @ ${closePrice}`,
       });
     } else {
-      // ── Partner profit split (real trades only) ──────────────────────
-      // Partners keep 70% of trading profit per the VelozPartner Pro program.
-      // Regular traders keep 100%. Check if the closing user is a partner.
-      let creditedProfit = profit;
-      let selfPartnerId: number | null = null;
-
-      if (profit !== 0) {
-        const [selfPartner] = await tx
-          .select({ id: partnersTable.id, clerkUserId: partnersTable.clerkUserId })
-          .from(partnersTable)
-          .where(eq(partnersTable.clerkUserId, userId));
-
-        if (selfPartner) {
-          selfPartnerId = selfPartner.id;
-          // Apply 70/30 split only on positive profit (losses are always 100%)
-          creditedProfit = profit > 0 ? profit * 0.7 : profit;
-        }
-      }
+      // Partners trade on identical terms as regular clients — no profit split.
+      // (VEL-IB-SPEC-2026-R1 removed the legacy VelozPartner Pro 70/30 model.)
+      const creditedProfit = profit;
 
       await tx
         .update(accountsTable)
@@ -491,25 +435,18 @@ router.delete("/positions/:id", requireAuth, tradingRateLimit, async (req, res):
         isDemo: false,
         refType: "order",
         refId: order.id,
-        description:
-          selfPartnerId && profit > 0
-            ? `Close ${pos.symbol} @ ${closePrice} — partner 70/30 split applied`
-            : `Close ${pos.symbol} @ ${closePrice}`,
+        description: `Close ${pos.symbol} @ ${closePrice}`,
       });
 
-      // ── Trading-profit audit stream ──────────────────────────────────
-      // Record profitable closes in partner_commissions for full 3-stream
-      // audit trail (cpa / rev_share / trading_profit).
-      if (selfPartnerId && creditedProfit > 0) {
-        await tx
-          .insert(partnerCommissionsTable)
-          .values({
-            partnerId: selfPartnerId,
-            sourceType: "trading_profit",
-            amount: creditedProfit.toFixed(2),
-            refPositionId: order.id,
-            refClerkUserId: userId,
-          });
+      // ── IB/Sub-IB commission accrual (real trades only) ──────────────
+      // One closed real trade → pending lot_rebate (+ parent_override for sub-IB
+      // books). Settlement happens in the admin-approved monthly run.
+      if (!pos.isDemo) {
+        await accrueForClosedPosition(tx, {
+          positionId: pos.id,
+          clientId: userId,
+          lots: volume,
+        });
       }
     }
   });

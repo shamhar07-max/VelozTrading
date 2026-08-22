@@ -1,8 +1,19 @@
 import { Router, type IRouter } from "express";
-import { eq, and, count, sql, desc } from "drizzle-orm";
+import { eq, and, count, sql, desc, inArray } from "drizzle-orm";
 import { clerkClient, getAuth } from "@clerk/express";
 import { db, accountsTable, positionsTable, ordersTable, depositRequestsTable, withdrawalRequestsTable, cryptoDepositsTable, partnersTable, referralsTable, partnerCommissionsTable, transactionsTable } from "@workspace/db";
 import { recalcPartnerUnlock } from "./partner";
+import {
+  approveCommissionRun,
+  getPendingRunSummary,
+  queueCpaIfQualified,
+  reverseCommission,
+  canTransition,
+  validatePartnerCreation,
+  PARTNER_STATUSES,
+  RETROACTIVE_ATTRIBUTION_WINDOW_DAYS,
+  type PartnerStatus,
+} from "../lib/partnerProgram";
 import { priceCache, changePercentCache, getWssClientCount } from "../ws/priceStreamer";
 import { requireAdmin } from "../middlewares/requireAdmin";
 import { adminRateLimit, bootstrapRateLimit } from "../middlewares/rateLimit";
@@ -587,86 +598,22 @@ router.patch("/admin/deposits/:id", requireAdmin, adminRateLimit, async (req, re
       });
       newTier = await recalcAccountTier(tx, request.clerkUserId);
 
-      // ── CPA commission trigger ──────────────────────────────────────────
-      const depositAmount = parseFloat(request.amount);
-      if (depositAmount >= 250) {
-        const [acc] = await tx
-          .select({ referredByPartnerId: accountsTable.referredByPartnerId })
-          .from(accountsTable)
-          .where(eq(accountsTable.clerkUserId, request.clerkUserId));
-
-        const partnerId = acc?.referredByPartnerId;
-        if (partnerId) {
-          const [referral] = await tx
-            .select()
-            .from(referralsTable)
-            .where(and(
-              eq(referralsTable.partnerId, partnerId),
-              eq(referralsTable.referredClerkUserId, request.clerkUserId),
-            ));
-
-          if (referral && !referral.cpaPaid) {
-            const [partner] = await tx
-              .select()
-              .from(partnersTable)
-              .where(eq(partnersTable.id, partnerId));
-
-            if (partner && partner.status === "active") {
-              const cpaAmount = parseFloat(String(partner.cpaRate));
-
-              // Credit CPA to partner commission wallet (display/audit total)
-              await tx
-                .update(partnersTable)
-                .set({ commissionWallet: sql`commission_wallet + ${cpaAmount.toFixed(2)}::numeric` })
-                .where(eq(partnersTable.id, partnerId));
-
-              // Also credit to partner's account balance so it is immediately withdrawable.
-              // commissionWallet tracks the cumulative earned total for display; balance is
-              // the live, consumable amount.
-              await tx
-                .update(accountsTable)
-                .set({ balance: sql`balance + ${cpaAmount.toFixed(2)}::numeric` })
-                .where(eq(accountsTable.clerkUserId, partner.clerkUserId));
-
-              await recordTransaction(tx, {
-                clerkUserId: partner.clerkUserId,
-                type: "partner_cpa",
-                amount: cpaAmount.toFixed(2),
-                isDemo: false,
-                refType: "deposit_request",
-                refId: request.id,
-                description: `CPA bonus — referred user ${request.clerkUserId} deposited $${depositAmount.toFixed(2)}`,
-              });
-
-              // Insert commission audit row
-              await tx
-                .insert(partnerCommissionsTable)
-                .values({
-                  partnerId,
-                  sourceType: "cpa",
-                  amount: cpaAmount.toFixed(2),
-                  refClerkUserId: request.clerkUserId,
-                });
-
-              // Mark referral CPA as paid and deposit as active
-              await tx
-                .update(referralsTable)
-                .set({ cpaPaid: true, depositStatus: "active" })
-                .where(eq(referralsTable.id, referral.id));
-
-              // Recalculate capital unlock milestone
-              await recalcPartnerUnlock(tx, partnerId);
-
-              // Capture for post-transaction email
-              cpaEmailData = { partnerId, partnerClerkUserId: partner.clerkUserId, partnerName: partner.name, cpaAmount };
-            }
-          } else if (referral && referral.depositStatus === "none" && depositAmount >= 250) {
-            // First deposit but CPA already paid (edge case guard) — still activate referral
-            await tx
-              .update(referralsTable)
-              .set({ depositStatus: "active" })
-              .where(eq(referralsTable.id, referral.id));
-          }
+      // ── CPA commission trigger (VEL-IB-SPEC-2026-R1 §4) ────────────────
+      // Qualifying deposit ≥ $250 → PENDING cpa row, once per (partner, client).
+      // Settlement happens in the approved monthly run — never instantly.
+      if (parseFloat(request.amount) >= 250) {
+        const queued = await queueCpaIfQualified(tx, {
+          clientId: request.clerkUserId,
+          depositAmount: parseFloat(request.amount),
+        });
+        if (queued) {
+          await recalcPartnerUnlock(tx, queued.partnerId);
+          cpaEmailData = {
+            partnerId: queued.partnerId,
+            partnerClerkUserId: queued.partnerClerkUserId,
+            partnerName: queued.partnerName,
+            cpaAmount: queued.cpaAmount,
+          };
         }
       }
     });
@@ -1162,6 +1109,8 @@ router.post("/admin/partners", requireAdmin, adminRateLimit, async (req, res): P
     clerkUserId,
     name,
     referralCode,
+    parentReferralCode,
+    tier,
     seededCapital,
     cpaRate,
     revSharePct,
@@ -1169,6 +1118,8 @@ router.post("/admin/partners", requireAdmin, adminRateLimit, async (req, res): P
     clerkUserId?: string;
     name?: string;
     referralCode?: string;
+    parentReferralCode?: string;
+    tier?: string;
     seededCapital?: number;
     cpaRate?: number;
     revSharePct?: number;
@@ -1182,15 +1133,46 @@ router.post("/admin/partners", requireAdmin, adminRateLimit, async (req, res): P
     res.status(400).json({ error: "name required" });
     return;
   }
+  if (!referralCode || typeof referralCode !== "string") {
+    res.status(400).json({ error: "referralCode required (VT-IB-* for IBs, VT-SUB-* for sub-IB desks)" });
+    return;
+  }
+
+  // ── Spec §5 invariants: code namespace + two-tier hierarchy ──────────────
+  let parent: typeof partnersTable.$inferSelect | undefined;
+  if (parentReferralCode) {
+    [parent] = await db
+      .select()
+      .from(partnersTable)
+      .where(eq(partnersTable.referralCode, parentReferralCode.toUpperCase().trim()));
+    if (!parent) {
+      res.status(404).json({ error: `Parent IB '${parentReferralCode}' not found` });
+      return;
+    }
+    if (parent.parentPartnerId != null) {
+      res.status(400).json({ error: "Parent must be a top-level IB — the hierarchy is limited to two tiers" });
+      return;
+    }
+  }
+
+  const prefixError = validatePartnerCreation({
+    referralCode,
+    parentReferralCode: parent?.referralCode ?? null,
+  });
+  if (prefixError) {
+    res.status(400).json({ error: prefixError });
+    return;
+  }
 
   const seed = Number(seededCapital ?? 0);
   const cpa = Number(cpaRate ?? 50);
   const rev = Number(revSharePct ?? 0.3);
-
   if (seed < 0 || cpa < 0 || rev < 0 || rev > 1) {
     res.status(400).json({ error: "Invalid seededCapital, cpaRate, or revSharePct (revSharePct must be 0–1)" });
     return;
   }
+  const validTiers = ["tier1", "tier2", "tier3"];
+  const chosenTier = tier && validTiers.includes(tier) ? tier : "tier1";
 
   // Ensure the Clerk user exists
   try {
@@ -1200,41 +1182,26 @@ router.post("/admin/partners", requireAdmin, adminRateLimit, async (req, res): P
     return;
   }
 
-  // Generate referral code — unique across all partners
-  let code = referralCode
-    ? referralCode.toUpperCase().trim()
-    : `VT-${name.replace(/\s+/g, "").toUpperCase().slice(0, 10)}`;
-
-  // Check for collision on the base code
+  const code = referralCode.toUpperCase().trim();
   const [codeClash] = await db
     .select({ id: partnersTable.id })
     .from(partnersTable)
     .where(eq(partnersTable.referralCode, code));
-
   if (codeClash) {
-    if (referralCode) {
-      // Caller supplied this exact code — return conflict instead of guessing
-      res.status(409).json({ error: `Referral code '${code}' is already in use. Choose a different code.` });
-      return;
-    }
-    // Auto-generated collision: append incrementing suffix until unique
-    let found = false;
-    for (let suffix = 2; suffix <= 99; suffix++) {
-      const candidate = `${code}${suffix}`;
-      const [clash] = await db
-        .select({ id: partnersTable.id })
-        .from(partnersTable)
-        .where(eq(partnersTable.referralCode, candidate));
-      if (!clash) { code = candidate; found = true; break; }
-    }
-    if (!found) {
-      res.status(409).json({ error: "Could not generate a unique referral code. Supply one explicitly." });
-      return;
-    }
+    res.status(409).json({ error: `Referral code '${code}' is already in use.` });
+    return;
   }
 
+  // Activation gate (spec §2 step 6): a new partner enters 'vetting' and only an
+  // already-KYC-approved owner starts 'active'. KYC is never granted implicitly.
+  let initialStatus = "vetting";
+  try {
+    const clerkUser = await clerkClient.users.getUser(clerkUserId);
+    if (clerkUser.publicMetadata?.kycStatus === "verified") initialStatus = "active";
+  } catch { /* keep vetting */ }
+
   await db.transaction(async (tx) => {
-    // Upsert account so partner has an account row
+    // Upsert account so partner has an account row (KYC left untouched/unverified).
     const [existing] = await tx
       .select()
       .from(accountsTable)
@@ -1249,12 +1216,11 @@ router.post("/admin/partners", requireAdmin, adminRateLimit, async (req, res): P
         currency: "USD",
         leverage: 100,
         accountType: "real",
-        kycStatus: "verified",
       });
-    } else if (seed > 0) {
+    } else if (seed > 0 && parseFloat(String(existing.balance)) === 0) {
       await tx
         .update(accountsTable)
-        .set({ balance: seed.toFixed(2), kycStatus: "verified" })
+        .set({ balance: seed.toFixed(2) })
         .where(eq(accountsTable.clerkUserId, clerkUserId));
     }
 
@@ -1262,21 +1228,24 @@ router.post("/admin/partners", requireAdmin, adminRateLimit, async (req, res): P
       clerkUserId,
       name,
       referralCode: code,
+      parentPartnerId: parent?.id ?? null,
+      tier: chosenTier,
+      legacyId: null,
       seededCapital: seed.toFixed(2),
       cpaRate: cpa.toFixed(2),
       revSharePct: rev.toFixed(4),
       capitalUnlockedPct: 0,
       commissionWallet: "0.00",
-      status: "active",
+      status: initialStatus,
     });
   });
 
   const [created] = await db
     .select()
     .from(partnersTable)
-    .where(eq(partnersTable.clerkUserId, clerkUserId));
+    .where(eq(partnersTable.referralCode, code));
 
-  req.log.info({ clerkUserId, code, seed }, "admin: partner created");
+  req.log.info({ clerkUserId, code, parent: parent?.referralCode ?? null, seed }, "admin: partner created");
   res.status(201).json({
     ok: true,
     partner: {
@@ -1284,6 +1253,8 @@ router.post("/admin/partners", requireAdmin, adminRateLimit, async (req, res): P
       clerkUserId: created!.clerkUserId,
       name: created!.name,
       referralCode: created!.referralCode,
+      parentPartnerId: created!.parentPartnerId ?? null,
+      tier: created!.tier,
       seededCapital: parseFloat(String(created!.seededCapital)),
       cpaRate: parseFloat(String(created!.cpaRate)),
       revSharePct: parseFloat(String(created!.revSharePct)),
@@ -1293,23 +1264,171 @@ router.post("/admin/partners", requireAdmin, adminRateLimit, async (req, res): P
   });
 });
 
+// Lifecycle transition (spec §8): applied→vetting→active→{suspended,dormant}→…
+router.post("/admin/partners/:id/lifecycle", requireAdmin, adminRateLimit, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  const { status } = req.body as { status?: string };
+
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  if (!status || !PARTNER_STATUSES.includes(status as never)) {
+    res.status(400).json({ error: `status must be one of: ${PARTNER_STATUSES.join(", ")}` });
+    return;
+  }
+
+  const [partner] = await db.select().from(partnersTable).where(eq(partnersTable.id, id));
+  if (!partner) { res.status(404).json({ error: "Partner not found" }); return; }
+
+  if (!canTransition(partner.status as PartnerStatus, status as PartnerStatus)) {
+    res.status(400).json({ error: `Transition ${partner.status} → ${status} is not permitted` });
+    return;
+  }
+
+  await db.update(partnersTable).set({ status }).where(eq(partnersTable.id, id));
+  req.log.info({ partnerId: id, from: partner.status, to: status }, "admin: partner lifecycle change");
+  res.json({ ok: true, from: partner.status, to: status });
+});
+
+// Retroactive attribution (spec §2.3): allowed only inside the retro window.
+router.post("/admin/partners/:id/attribute", requireAdmin, adminRateLimit, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  const { clientClerkUserId, note } = req.body as { clientClerkUserId?: string; note?: string };
+
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  if (!clientClerkUserId || !note || !note.trim()) {
+    res.status(400).json({ error: "clientClerkUserId and note (audit reason) are required" });
+    return;
+  }
+
+  const [partner] = await db.select().from(partnersTable).where(eq(partnersTable.id, id));
+  if (!partner) { res.status(404).json({ error: "Partner not found" }); return; }
+
+  const [account] = await db
+    .select()
+    .from(accountsTable)
+    .where(eq(accountsTable.clerkUserId, clientClerkUserId));
+  if (!account) { res.status(404).json({ error: "Client account not found" }); return; }
+  if (account.referredByPartnerId) {
+    res.status(409).json({ error: "Client is already attributed to a partner" });
+    return;
+  }
+
+  const ageDays = (Date.now() - new Date(account.createdAt).getTime()) / 86_400_000;
+  if (ageDays > RETROACTIVE_ATTRIBUTION_WINDOW_DAYS) {
+    res.status(400).json({ error: `Attribution window (${RETROACTIVE_ATTRIBUTION_WINDOW_DAYS} days) has expired` });
+    return;
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(accountsTable)
+      .set({ referredByPartnerId: partner.id, referralCode: partner.referralCode })
+      .where(eq(accountsTable.clerkUserId, clientClerkUserId));
+    await tx.insert(referralsTable).values({
+      partnerId: partner.id,
+      referredClerkUserId: clientClerkUserId,
+      depositStatus: "none",
+      cpaPaid: false,
+    });
+  });
+
+  req.log.info(
+    { partnerId: id, clientClerkUserId, note: note.trim() },
+    "admin: retroactive attribution",
+  );
+  res.json({ ok: true, attributedTo: partner.referralCode });
+});
+
+// ── Commission runs (spec §4): pending summary → approval → clawback ────────
+
+router.get("/admin/commissions/pending", requireAdmin, async (req, res): Promise<void> => {
+  const month = typeof req.query.month === "string" ? req.query.month : undefined;
+  const rows = await getPendingRunSummary(month);
+
+  const byPartner = new Map<number, { partnerId: number; streams: Record<string, number>; total: number; lines: number }>();
+  for (const r of rows) {
+    const entry = byPartner.get(r.partnerId) ?? { partnerId: r.partnerId, streams: {}, total: 0, lines: 0 };
+    entry.streams[r.sourceType] = parseFloat(String(r.total));
+    entry.total += parseFloat(String(r.total));
+    entry.lines += Number(r.lines);
+    byPartner.set(r.partnerId, entry);
+  }
+
+  const partnerIds = [...byPartner.keys()];
+  const partners = partnerIds.length
+    ? await db.select().from(partnersTable).where(inArray(partnersTable.id, partnerIds))
+    : [];
+  const meta = new Map(partners.map(p => [p.id, p]));
+
+  res.json({
+    month: month ?? null,
+    partners: [...byPartner.values()].map(e => ({
+      ...e,
+      total: parseFloat(e.total.toFixed(2)),
+      name: meta.get(e.partnerId)?.name ?? null,
+      referralCode: meta.get(e.partnerId)?.referralCode ?? null,
+      status: meta.get(e.partnerId)?.status ?? null,
+    })),
+  });
+});
+
+router.post("/admin/commissions/approve", requireAdmin, adminRateLimit, async (req, res): Promise<void> => {
+  const { month, partnerIds } = req.body as { month?: string; partnerIds?: number[] };
+  if (month && !/^\d{4}-\d{2}$/.test(month)) {
+    res.status(400).json({ error: "month must be formatted YYYY-MM" });
+    return;
+  }
+
+  const result = await db.transaction(async (tx) =>
+    approveCommissionRun(tx, { month, partnerIds }),
+  );
+
+  req.log.info(result, "admin: commission run approved");
+  res.json({ ok: true, ...result });
+});
+
+router.post("/admin/commissions/reverse", requireAdmin, adminRateLimit, async (req, res): Promise<void> => {
+  const { commissionId, reason } = req.body as { commissionId?: number; reason?: string };
+
+  if (typeof commissionId !== "number" || isNaN(commissionId)) {
+    res.status(400).json({ error: "commissionId (number) required" });
+    return;
+  }
+  if (!reason || !reason.trim()) {
+    res.status(400).json({ error: "A reversal reason is mandatory" });
+    return;
+  }
+
+  const result = await db.transaction(async (tx) =>
+    reverseCommission(tx, { commissionId, reason }),
+  );
+  if (!result.ok) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+
+  req.log.info({ commissionId, reason }, "admin: commission reversed");
+  res.json({ ok: true, reversedAmount: result.reversedAmount });
+});
+
 router.patch("/admin/partners/:id", requireAdmin, adminRateLimit, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
-  const { status, cpaRate, revSharePct } = req.body as {
-    status?: string;
+  const { cpaRate, revSharePct, tier, legacyId } = req.body as {
     cpaRate?: number;
     revSharePct?: number;
+    tier?: string;
+    legacyId?: string | null;
   };
 
-  const updates: Record<string, string | number> = {};
-  if (status && ["active", "suspended", "closed"].includes(status)) updates.status = status;
+  const updates: Record<string, string | number | null> = {};
   if (typeof cpaRate === "number" && cpaRate >= 0) updates.cpaRate = cpaRate.toFixed(2);
   if (typeof revSharePct === "number" && revSharePct >= 0 && revSharePct <= 1) updates.revSharePct = revSharePct.toFixed(4);
+  if (tier && ["tier1", "tier2", "tier3"].includes(tier)) updates.tier = tier;
+  if (legacyId !== undefined) updates.legacyId = legacyId;
 
   if (Object.keys(updates).length === 0) {
-    res.status(400).json({ error: "Nothing to update" });
+    res.status(400).json({ error: `Nothing to update. Status changes use POST /admin/partners/:id/lifecycle (${PARTNER_STATUSES.join(", ")})` });
     return;
   }
 
@@ -1487,19 +1606,14 @@ router.post("/admin/create-user-bypass", requireAdmin, adminRateLimit, async (re
       created = true;
     }
 
-    // If claim code provided, link the real userId to the seeded partner/account
+    // If claim code provided, link the real userId to the seeded partner/account.
+    // (VEL-IB-SPEC-2026-R1: attribution is always explicit via claimReferralCode —
+    // the legacy email-based auto-claim hack was removed.)
     if (targetCode) {
       const [partner] = await db.select().from(partnersTable).where(eq(partnersTable.referralCode, targetCode));
       if (partner && partner.clerkUserId.startsWith("mock_")) {
         await db.update(partnersTable).set({ clerkUserId: userId }).where(eq(partnersTable.id, partner.id));
         await db.update(accountsTable).set({ clerkUserId: userId }).where(eq(accountsTable.clerkUserId, `mock_${targetCode.toLowerCase()}`));
-      }
-    } else if (email.toLowerCase() === "rohitkatariya1820@gmail.com") {
-      // Auto-claim Rohit's IB on creation
-      const [rohitPartner] = await db.select().from(partnersTable).where(eq(partnersTable.referralCode, "VT-IB-IN-001"));
-      if (rohitPartner && rohitPartner.clerkUserId.startsWith("mock_")) {
-        await db.update(partnersTable).set({ clerkUserId: userId }).where(eq(partnersTable.id, rohitPartner.id));
-        await db.update(accountsTable).set({ clerkUserId: userId }).where(eq(accountsTable.clerkUserId, "mock_vt-ib-in-001"));
       }
     }
 
