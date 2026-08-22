@@ -30,7 +30,8 @@ COPY artifacts ./artifacts
 
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @workspace/api-server run build \
- && pnpm --filter @workspace/veloztrade run build
+ && pnpm --filter @workspace/veloztrade run build \
+ && pnpm --filter @workspace/mobile-app run build
 
 # ── Runtime stage ────────────────────────────────────────────────────────────
 FROM node:24-slim
@@ -45,6 +46,7 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/artifacts/api-server/node_modules ./artifacts/api-server/node_modules
 COPY --from=build /app/artifacts/api-server/dist ./artifacts/api-server/dist
 COPY --from=build /app/artifacts/veloztrade/dist ./artifacts/veloztrade/dist
+COPY --from=build /app/artifacts/mobile-app/dist ./artifacts/mobile-app/dist
 # Versioned SQL migrations — applied automatically by dist/migrate.mjs at startup
 COPY --from=build /app/lib/db/drizzle ./migrations
 

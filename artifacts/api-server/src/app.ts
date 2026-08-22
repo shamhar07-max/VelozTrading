@@ -242,6 +242,16 @@ app.use(express.static(frontendDist, { index: false }));
 
 // (runtimeConfig and /config.js already defined above before Clerk — see public endpoints section)
 
+// ── VelozTrade Mobile app (/m) — native-app UI for Android/iOS shells ──────
+const mobileDist = path.resolve(__dirname, "../../mobile-app/dist");
+if (fs.existsSync(mobileDist)) {
+  app.use("/m", express.static(mobileDist, { index: false }));
+  app.get(["/m", "/m/{*path}"], (_req, res) => {
+    res.sendFile(path.join(mobileDist, "index.html"));
+  });
+  console.log("[boot] mobile app served at /m");
+}
+
 // SPA fallback — all non-API routes return index.html so client-side routing works.
 // Injects <script src="/config.js"> before </head> so the runtime config is
 // available before the app bundle runs.

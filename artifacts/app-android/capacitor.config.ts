@@ -13,8 +13,9 @@ const config: CapacitorConfig = {
   appName: 'VelozTrade',
   webDir: '../veloztrade/dist/public',
   server: {
-    // Primary: always load the live platform (auth + WS + config.js intact)
-    url: 'https://veloztrade.com',
+    // Primary: the dedicated mobile app UI (native-app look & feel),
+    // served same-origin as the platform → Clerk cookies + WS just work
+    url: 'https://veloztrade.com/m',
     androidScheme: 'https',
     allowNavigation: [
       'veloztrade.com', '*.veloztrade.com',
