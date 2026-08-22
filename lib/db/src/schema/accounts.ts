@@ -18,6 +18,9 @@ export const accountsTable = pgTable("accounts", {
   pushToken: text("push_token"),
   referralCode: text("referral_code"),
   referredByPartnerId: integer("referred_by_partner_id"),
+  mockName: text("mock_name"),
+  mockEmail: text("mock_email"),
+  isMock: boolean("is_mock").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

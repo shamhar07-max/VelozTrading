@@ -18,11 +18,13 @@ import socialRouter from "./social";
 import exportPdfRouter from "./exportPdf";
 import partnerRouter from "./partner";
 import omniRouter from "./omni";
+import seedMockRouter from "./seedMock";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(omniRouter);
+router.use(seedMockRouter);
 router.use(accountRouter);
 router.use(instrumentsRouter);
 router.use(positionsRouter);
