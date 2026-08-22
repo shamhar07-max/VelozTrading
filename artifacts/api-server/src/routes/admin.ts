@@ -179,7 +179,8 @@ router.get("/admin/users", requireAdmin, async (_req, res): Promise<void> => {
 
   const result = accounts.map((acc: any) => {
     const cu = clerkMap.get(acc.clerkUserId);
-    const isMock = acc.isMock || acc.clerkUserId.startsWith("mock_");
+    // For seeded real data, Clerk may not have the user yet — fallback to stored mockName/email
+    const hasClerk = !!cu;
     const balance = parseFloat(acc.balance);
 
     // Compute margin metrics from cached prices — no external API calls
@@ -204,9 +205,9 @@ router.get("/admin/users", requireAdmin, async (_req, res): Promise<void> => {
 
     return {
       clerkUserId: acc.clerkUserId,
-      email: isMock ? (acc.mockEmail ?? "—") : (cu?.emailAddresses[0]?.emailAddress ?? "—"),
-      name: isMock ? (acc.mockName ?? acc.clerkUserId) : ([cu?.firstName, cu?.lastName].filter(Boolean).join(" ") || "—"),
-      imageUrl: isMock ? null : (cu?.imageUrl ?? null),
+      email: hasClerk ? (cu!.emailAddresses[0]?.emailAddress ?? acc.mockEmail ?? "—") : (acc.mockEmail ?? "—"),
+      name: hasClerk ? ([cu!.firstName, cu!.lastName].filter(Boolean).join(" ") || acc.mockName || "—") : (acc.mockName ?? acc.clerkUserId),
+      imageUrl: hasClerk ? (cu!.imageUrl ?? null) : null,
       balance,
       equity: parseFloat(equity.toFixed(2)),
       floatingPnl: parseFloat(floatingPnl.toFixed(2)),

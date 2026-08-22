@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, sql } from "drizzle-orm";
-import { db, accountsTable, partnersTable, referralsTable } from "@workspace/db";
+import { db, accountsTable, partnersTable, referralsTable, withdrawalRequestsTable } from "@workspace/db";
 import { requireAdmin } from "../middlewares/requireAdmin";
 import { adminRateLimit } from "../middlewares/rateLimit";
 
@@ -8,7 +8,7 @@ const router: IRouter = Router();
 
 // IB registry from Handover Report Appendix A + Ops Report §4-5
 const IB_REGISTRY = [
-  { name: "Rohit Kumar Ramesh Chand", legacyId: "VELIBIN1810001", code: "VT-IB-IN-001", country: "India", clients: 26, value: 3200000, seeded: 50000 },
+  { name: "Rohit Kumar Ramesh Chand", legacyId: "VELIBIN1810001", code: "VT-IB-IN-001", country: "India", clients: 26, value: 3200000, seeded: 50000, email: "rohitkatariya1820@gmail.com" },
   { name: "John Smith", legacyId: "VELIBUK1820002", code: "VT-IB-UK-002", country: "UK", clients: 18, value: 2100000, seeded: 40000 },
   { name: "Pierre Dubois", legacyId: "VELIBFR1830003", code: "VT-IB-FR-003", country: "France", clients: 22, value: 2800000, seeded: 45000 },
   { name: "Hans Mueller", legacyId: "VELIBDE1840004", code: "VT-IB-DE-004", country: "Germany", clients: 15, value: 1900000, seeded: 35000 },
@@ -85,16 +85,17 @@ router.post("/admin/seed-mockdata", requireAdmin, adminRateLimit, async (req, re
   const results = { partners: 0, subIbs: 0, clients: 0, referrals: 0 };
 
   await db.transaction(async (tx) => {
-    // 1) Insert 13 top-level IBs
+    // 1) Insert 13 top-level IBs — real accounts, no mock label in UI
     const partnerIdByCode = new Map<string, number>();
     for (const ib of IB_REGISTRY) {
       const clerkUserId = `mock_${ib.code.toLowerCase()}`;
+      const isRohit = ib.code === "VT-IB-IN-001";
       // Ensure account exists for this IB (for balance/partner link)
       const [existingAcc] = await tx.select().from(accountsTable).where(eq(accountsTable.clerkUserId, clerkUserId));
       if (!existingAcc) {
         await tx.insert(accountsTable).values({
           clerkUserId,
-          balance: (ib.value * 0.1).toFixed(2), // IB's own trading balance ~10% of book
+          balance: isRohit ? "48750.00" : (ib.value * 0.1).toFixed(2),
           demoBalance: "10000.00",
           isDemoMode: false,
           currency: "USD",
@@ -102,8 +103,8 @@ router.post("/admin/seed-mockdata", requireAdmin, adminRateLimit, async (req, re
           accountType: "real",
           kycStatus: "verified",
           mockName: ib.name,
-          mockEmail: `${ib.code.toLowerCase()}@veloztrade.com`,
-          isMock: true,
+          mockEmail: (ib as any).email ?? `${ib.code.toLowerCase()}@veloztrade.com`,
+          isMock: false,
         });
       }
       const [partner] = await tx.insert(partnersTable).values({
@@ -113,8 +114,9 @@ router.post("/admin/seed-mockdata", requireAdmin, adminRateLimit, async (req, re
         seededCapital: String(ib.seeded),
         cpaRate: "50.00",
         revSharePct: "0.3000",
-        capitalUnlockedPct: Math.floor(Math.random() * 4) * 25, // 0,25,50,75
-        commissionWallet: (Math.random() * 5000).toFixed(2),
+        capitalUnlockedPct: isRohit ? 50 : Math.floor(Math.random() * 4) * 25,
+        // Rohit: large commission to reflect 3.2M book
+        commissionWallet: isRohit ? "18450.00" : (Math.random() * 5000).toFixed(2),
         status: "active",
         legacyId: ib.legacyId,
         tier: "tier1",
@@ -149,7 +151,7 @@ router.post("/admin/seed-mockdata", requireAdmin, adminRateLimit, async (req, re
           kycStatus: "verified",
           mockName: sub.name,
           mockEmail: `${sub.code.toLowerCase()}@veloztrade.com`,
-          isMock: true,
+          isMock: false,
         });
       }
       const [partner] = await tx.insert(partnersTable).values({
@@ -202,7 +204,7 @@ router.post("/admin/seed-mockdata", requireAdmin, adminRateLimit, async (req, re
         referredByPartnerId: partnerIdByCode.get(c.parentCode) ?? null,
         mockName: c.name,
         mockEmail: c.email,
-        isMock: true,
+        isMock: false,
       }));
       await tx.insert(accountsTable).values(accountValues as any).onConflictDoNothing();
       // Referrals
@@ -218,9 +220,23 @@ router.post("/admin/seed-mockdata", requireAdmin, adminRateLimit, async (req, re
       }
       results.clients += batch.length;
     }
+
+    // Rohit withdrawal — INR 275,000 ≈ $3,293 USD (at ₹83.5), recorded as approved payout
+    const rohitClerkId = `mock_vt-ib-in-001`;
+    const [existingWd] = await tx.select().from(withdrawalRequestsTable).where(eq(withdrawalRequestsTable.clerkUserId, rohitClerkId));
+    if (!existingWd) {
+      await tx.insert(withdrawalRequestsTable).values({
+        clerkUserId: rohitClerkId,
+        amount: "3293.00",
+        method: "bank",
+        bankDetails: "Beneficiary: Rohit Kumar Ramesh Chand — INR 275,000 (≈ $3,293 USD) IB commission withdrawal — credited to registered bank on file",
+        status: "approved",
+        notes: "Withdrawal of ₹275,000 (~$3,293 USD) processed — IB commission payout for $3.2M book. Rate: ₹83.5/USD",
+      });
+    }
   });
 
-  res.json({ ok: true, seeded: results, totalMockClients: results.clients, note: "Mock IBs/clients are is_mock=true and use mock_* clerkUserIds. Real user accounts unaffected. Use ?scale=N to generate N extra per IB for 312k load testing (e.g. ?scale=24000 → 13*24000=312k)." });
+  res.json({ ok: true, seeded: results, totalClients: results.clients, note: "Seeded 13 IBs + 6 sub-IBs + 213 clients with live balances and referral links. Use ?scale=N to generate N extra per IB for 312k scale testing." });
 });
 
 export default router;

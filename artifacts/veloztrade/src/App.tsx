@@ -36,6 +36,8 @@ import { TradingSignals } from "@/pages/signals";
 import { Academy } from "@/pages/academy";
 import { Referral } from "@/pages/referral";
 import { Partner } from "@/pages/partner";
+import { IbPanel } from "@/pages/ib";
+import { SubIbPanel } from "@/pages/subIb";
 import { Contests } from "@/pages/contests";
 import { Notifications } from "@/pages/notifications";
 import { Support } from "@/pages/support";
@@ -408,6 +410,8 @@ function ClerkProviderWithRoutes() {
             <Route path="/academy"><Academy /></Route>
             <Route path="/referral"><ProtectedRoute component={Referral} /></Route>
             <Route path="/partner"><ProtectedRoute component={Partner} /></Route>
+            <Route path="/ib"><ProtectedRoute component={IbPanel} /></Route>
+            <Route path="/sub-ib"><ProtectedRoute component={SubIbPanel} /></Route>
             <Route path="/contests"><ProtectedRoute component={Contests} /></Route>
             <Route path="/notifications"><ProtectedRoute component={Notifications} /></Route>
             <Route path="/support"><Support /></Route>

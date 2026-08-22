@@ -310,6 +310,97 @@ router.post("/partner/register-ref", requireAuth, accountRateLimit, async (req, 
   res.json({ ok: true });
 });
 
+// ── IB Panel — for top-level IBs (parentPartnerId is null) ──────────────────
+router.get("/ib/me", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as Request & { userId: string }).userId;
+  let clerkEmail: string | null = null;
+  try { const u = await clerkClient.users.getUser(userId); clerkEmail = u.emailAddresses[0]?.emailAddress ?? null; } catch { /* ignore */ }
+
+  // Find partner by clerkUserId, or by email fallback for seeded IBs (e.g. rohitkatariya1820@gmail.com)
+  let [partner] = await db.select().from(partnersTable).where(eq(partnersTable.clerkUserId, userId));
+  if (!partner && clerkEmail) {
+    const [byEmail] = await db.select().from(partnersTable).where(eq(partnersTable.clerkUserId, `mock_${clerkEmail.split("@")[0]?.toLowerCase()}`));
+    // Try matching mockEmail column directly
+    if (!byEmail) {
+      const all = await db.select().from(partnersTable);
+      const match = all.find(p => (p as any).mockEmail === clerkEmail || (p as any).legacyId && clerkEmail.includes("rohitkatariya") && p.referralCode === "VT-IB-IN-001");
+      if (match) partner = match as any;
+    }
+  }
+  // Direct email match for Rohit and other seeded IBs: check accounts mockEmail
+  if (!partner && clerkEmail) {
+    const [acc] = await db.select().from(accountsTable).where(eq(accountsTable.clerkUserId, userId));
+    // If user has no partner row yet but email is rohitkatariya1820@gmail.com, claim the seeded VT-IB-IN-001
+    if (clerkEmail.toLowerCase() === "rohitkatariya1820@gmail.com") {
+      const [rohitPartner] = await db.select().from(partnersTable).where(eq(partnersTable.referralCode, "VT-IB-IN-001"));
+      if (rohitPartner) {
+        // Claim it: update clerkUserId to real user
+        await db.update(partnersTable).set({ clerkUserId: userId }).where(eq(partnersTable.id, rohitPartner.id));
+        await db.update(accountsTable).set({ clerkUserId: userId }).where(eq(accountsTable.clerkUserId, `mock_vt-ib-in-001`));
+        partner = { ...rohitPartner, clerkUserId: userId } as any;
+      }
+    }
+  }
+
+  if (!partner || (partner as any).parentPartnerId) {
+    res.status(404).json({ error: "No IB account found for this user." });
+    return;
+  }
+
+  // Gather IB stats: direct clients + sub-IBs + sub-IB clients
+  const subIbs = await db.select().from(partnersTable).where(eq(partnersTable.parentPartnerId, partner.id));
+  const subIbIds = subIbs.map(s => s.id);
+  const allPartnerIds = [partner.id, ...subIbIds];
+
+  let totalClients = 0; let totalAum = 0;
+  for (const pid of allPartnerIds) {
+    const [cnt] = await db.select({ cnt: count() }).from(referralsTable).where(eq(referralsTable.partnerId, pid));
+    totalClients += Number(cnt?.cnt ?? 0);
+    const [sum] = await db.select({ total: sql<string>`COALESCE(SUM(balance::numeric),0)` }).from(accountsTable).where(eq(accountsTable.referredByPartnerId, pid));
+    totalAum += parseFloat(String(sum?.total ?? "0"));
+  }
+
+  const [withdrawals] = await db.select({ total: sql<string>`COALESCE(SUM(amount::numeric),0)` }).from(await import("@workspace/db").then(m => m.withdrawalRequestsTable) as any).where(eq((await import("@workspace/db").then(m => m.withdrawalRequestsTable) as any).clerkUserId, partner.clerkUserId)) as any || { total: "0" };
+
+  res.json({
+    id: partner.id,
+    name: partner.name,
+    referralCode: partner.referralCode,
+    legacyId: (partner as any).legacyId,
+    tier: (partner as any).tier,
+    seededCapital: parseFloat(String(partner.seededCapital)),
+    status: partner.status,
+    totalClients,
+    totalAum: parseFloat(totalAum.toFixed(2)),
+    subIbs: subIbs.map(s => ({ id: s.id, name: s.name, referralCode: s.referralCode, legacyId: (s as any).legacyId })),
+    subIbCount: subIbs.length,
+  });
+});
+
+// ── Sub-IB Panel — for sub desks (parentPartnerId not null) ─────────────────
+router.get("/sub-ib/me", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as Request & { userId: string }).userId;
+  const [partner] = await db.select().from(partnersTable).where(eq(partnersTable.clerkUserId, userId));
+  if (!partner || !(partner as any).parentPartnerId) {
+    res.status(404).json({ error: "No Sub-IB account found for this user." });
+    return;
+  }
+  const [parent] = await db.select().from(partnersTable).where(eq(partnersTable.id, (partner as any).parentPartnerId));
+  const [clientCnt] = await db.select({ cnt: count() }).from(referralsTable).where(eq(referralsTable.partnerId, partner.id));
+  const [aumRow] = await db.select({ total: sql<string>`COALESCE(SUM(balance::numeric),0)` }).from(accountsTable).where(eq(accountsTable.referredByPartnerId, partner.id));
+  res.json({
+    id: partner.id,
+    name: partner.name,
+    referralCode: partner.referralCode,
+    legacyId: (partner as any).legacyId,
+    parent: parent ? { id: parent.id, name: parent.name, referralCode: parent.referralCode } : null,
+    totalClients: Number(clientCnt?.cnt ?? 0),
+    totalAum: parseFloat(String(aumRow?.total ?? "0")),
+    seededCapital: parseFloat(String(partner.seededCapital)),
+    status: partner.status,
+  });
+});
+
 // GET /api/referral/stats — basic referral stats for any authenticated user
 // Returns live referral code + referred-user count.
 // Partners get their actual partner code and depositing referral count.
