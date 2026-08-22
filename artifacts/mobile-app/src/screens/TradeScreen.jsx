@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { openPosition } from "../api";
 import { fmt } from "../components";
+import CandleChart from "../components/Chart.jsx";
 
 export default function TradeScreen({ instruments, prices, initialSymbol, onOpened }) {
   const [sym, setSym] = useState(initialSymbol ?? "EUR/USD");
@@ -63,6 +64,9 @@ export default function TradeScreen({ instruments, prices, initialSymbol, onOpen
           ))}
         </div>
       )}
+
+      {/* Chart */}
+      <CandleChart symbol={sym} />
 
       {/* Live quote */}
       <div style={{ textAlign: "center", margin: "2px 0 8px" }}>
