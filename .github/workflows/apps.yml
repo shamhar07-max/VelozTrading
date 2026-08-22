@@ -45,13 +45,25 @@ jobs:
         working-directory: artifacts/app-android
         run: |
           R=android/app/src/main/res
-          mkdir -p $R/drawable
+          mkdir -p $R/drawable $R/values
           cp resources/splash.png $R/drawable/splash.png
-          cp resources/mipmap-mdpi/ic_launcher.png    $R/mipmap-mdpi/ic_launcher.png
-          cp resources/mipmap-hdpi/ic_launcher.png    $R/mipmap-hdpi/ic_launcher.png
-          cp resources/mipmap-xhdpi/ic_launcher.png   $R/mipmap-xhdpi/ic_launcher.png
-          cp resources/mipmap-xxhdpi/ic_launcher.png  $R/mipmap-xxhdpi/ic_launcher.png
-          cp resources/mipmap-xxxhdpi/ic_launcher.png $R/mipmap-xxxhdpi/ic_launcher.png
+          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            M=$R/mipmap-$d
+            mkdir -p $M
+            case $d in
+              mdpi)    S=48;;  hdpi) S=72;;  xhdpi) S=96;;  xxhdpi) S=144;; xxxhdpi) S=192;;
+            esac
+            # Legacy square/round launchers (Android 7 and below)
+            cp resources/mipmap-$d/ic_launcher.png $M/ic_launcher.png
+            cp resources/mipmap-$d/ic_launcher_round.png $M/ic_launcher_round.png
+            cp resources/mipmap-$d/ic_launcher_foreground.png $M/ic_launcher_foreground.png
+          done
+          # Adaptive icon background color (brand dark)
+          printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n  <color name="ic_launcher_background">#040C1A</color>\n</resources>\n' > $R/values/ic_launcher_background.xml
+          # Force adaptive icons to use our foreground + background on Android 8+
+          mkdir -p $R/mipmap-anydpi-v26
+          printf '<?xml version="1.0" encoding="utf-8"?>\n<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n  <background android:drawable="@color/ic_launcher_background"/>\n  <foreground android:drawable="@mipmap/ic_launcher_foreground"/>\n</adaptive-icon>\n' > $R/mipmap-anydpi-v26/ic_launcher.xml
+          printf '<?xml version="1.0" encoding="utf-8"?>\n<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n  <background android:drawable="@color/ic_launcher_background"/>\n  <foreground android:drawable="@mipmap/ic_launcher_foreground"/>\n</adaptive-icon>\n' > $R/mipmap-anydpi-v26/ic_launcher_round.xml
       - name: Sync
         working-directory: artifacts/app-android
         run: npx cap sync android

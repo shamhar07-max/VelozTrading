@@ -298,6 +298,22 @@ function SignUpPage() {
   );
 }
 
+// ── Mobile hand-off guard ───────────────────────────────────────────────────
+// Post-login redirects land on /m/… . If the main web SPA catches that URL
+// (client-side navigation or stale deploy), bounce hard to the mobile app
+// instead of rendering the web NotFound page.
+function MobileHandoff() {
+  const [location] = useLocation();
+  useEffect(() => {
+    window.location.replace("/m/");
+  }, [location]);
+  return (
+    <div className="min-h-[100dvh] flex items-center justify-center bg-background">
+      <p className="text-sm text-muted-foreground">Opening VelozTrade app…</p>
+    </div>
+  );
+}
+
 function HomeRedirect() {
   return (
     <>
@@ -424,6 +440,8 @@ function ClerkProviderWithRoutes() {
           <LiveChat/>
           <Switch>
             <Route path="/" component={HomeRedirect} />
+            <Route path="/m" component={MobileHandoff} />
+            <Route path="/m/{*rest}" component={MobileHandoff} />
             <Route path="/sign-in/*?" component={SignInPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
             <Route path="/onboarding"><ProtectedRoute component={Onboarding} /></Route>
