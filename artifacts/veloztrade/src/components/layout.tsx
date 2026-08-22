@@ -64,8 +64,8 @@ const navItems = [
 const moreItems = [
   { href: "/referral",      label: "Refer a Friend",  icon: Gift },
   { href: "/partner",       label: "Partner Portal",  icon: Handshake, partnerOnly: true },
-  { href: "/ib",            label: "IB Panel",        icon: Building2 },
-  { href: "/sub-ib",        label: "Sub-IB Panel",    icon: Layers },
+  { href: "/ib",            label: "IB Panel",        icon: Building2, partnerOnly: true },
+  { href: "/sub-ib",        label: "Sub-IB Panel",    icon: Layers, partnerOnly: true },
   { href: "/notifications", label: "Notifications",   icon: Bell },
   { href: "/support",       label: "Support",         icon: HelpCircle },
   { href: "/profile",       label: "Profile",         icon: User },
