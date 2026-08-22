@@ -102,7 +102,8 @@ async function fetchFinnhub(path: string, params: Record<string, string>): Promi
         continue;
       }
       if (!res.ok) {
-        logger.warn({ status: res.status, path }, "Finnhub API error");
+        const body = await res.text().catch(() => "");
+        logger.warn({ status: res.status, path, body: body.slice(0, 200) }, "Finnhub API error — check FINNHUB_API_KEY is correct and has no quotes/spaces");
         return null;
       }
       return await res.json() as unknown;

@@ -64,7 +64,8 @@ async function fetchTD(path: string, params: Record<string, string> = {}, timeou
   }
 
   if (!res.ok) {
-    logger.warn({ status: res.status, path }, "TwelveData API error");
+    const body = await res.text().catch(() => "");
+    logger.warn({ status: res.status, path, body: body.slice(0, 300) }, "TwelveData API error — will retry with backoff; if 429, free-tier quota is exhausted");
     return null;
   }
   const data = await res.json() as unknown;

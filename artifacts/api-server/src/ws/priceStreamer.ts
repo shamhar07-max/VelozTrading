@@ -871,9 +871,12 @@ export function setupWebSocket(server: Server) {
     })
     .catch((err) => logger.error({ err }, "Initial fetch failed"));
 
-  streamInterval = setInterval(fetchAndBroadcastPrices, 60_000);
+  // Free-tier throttling: 800 TwelveData credits/day = ~33/hour.
+  // Polling every 5m (prices) + 10m (quotes) stays well under the limit;
+  // 1s simulation ticks keep the UI feeling live between real fetches.
+  streamInterval = setInterval(fetchAndBroadcastPrices, 5 * 60_000);
   setTimeout(() => {
-    quoteInterval = setInterval(refreshChangePercents, 120_000);
+    quoteInterval = setInterval(refreshChangePercents, 10 * 60_000);
   }, 60_000);
 
   simulationInterval = setInterval(simulatePriceTick, 1000);
