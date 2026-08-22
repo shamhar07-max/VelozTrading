@@ -56,17 +56,23 @@ function useClerkSession() {
     const key =
       cfg.clerkPublishableKey ||
       import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-    if (!key) { setState({ loading: false, clerk: null, signedIn: false, noKey: true }); return; }
+    setBoot("cfg", key ? "ok" : "MISSING");
+    if (!key) { setBoot("session", "-"); setState({ loading: false, clerk: null, signedIn: false, noKey: true }); return; }
 
     try {
       const Clerk = await loadClerkJs(key);
+      setBoot("js", "ok");
       await Clerk.load();
-      const apply = (clerk) =>
+      setBoot("load", "ok");
+      const apply = (clerk) => {
+        setBoot("session", clerk.session ? "IN" : "out");
         setState({ loading: false, clerk, signedIn: !!clerk.session });
+      };
 
       apply(Clerk);
       Clerk.addListener((ev) => apply(Clerk));
     } catch (e) {
+      setBoot("err", String(e?.message ?? e).slice(0, 60));
       setState({ loading: false, clerk: null, signedIn: false, error: String(e) });
     }
   }
@@ -208,6 +214,43 @@ function HeroEquity({ prices }) {
   );
 }
 
+// ── Boot diagnostics ─────────────────────────────────────────────────────────
+// Temporary visibility layer: renders a fixed strip showing every boot stage
+// and any captured error, so field issues can be diagnosed from a screenshot.
+const BOOT = { cfg: "…", js: "…", load: "…", session: "…", err: "" };
+const listeners = new Set();
+function setBoot(k, v) { BOOT[k] = v; listeners.forEach((fn) => fn()); }
+function DebugStrip() {
+  const [, force] = useState(0);
+  useEffect(() => { const fn = () => force((x) => x + 1); listeners.add(fn); return () => listeners.delete(fn); }, []);
+  return (
+    <div className="num" style={{ position: "fixed", left: 6, bottom: 70, zIndex: 999, fontSize: 9,
+      color: "#7dd3fc", background: "rgba(0,0,0,.55)", padding: "3px 6px", borderRadius: 6, pointerEvents: "none" }}>
+      cfg:{BOOT.cfg} js:{BOOT.js} load:{BOOT.load} ses:{BOOT.session}{BOOT.err ? ` ERR:${BOOT.err}` : ""}
+    </div>
+  );
+}
+window.addEventListener("error", (e) => setBoot("err", (e.message || "error").slice(0, 80)));
+window.addEventListener("unhandledrejection", (e) => setBoot("err", String(e.reason ?? "rejection").slice(0, 80)));
+
+class RootErrorBoundary extends React.Component {
+  constructor(p){ super(p); this.state = { err: null }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  componentDidCatch(err) { setBoot("err", String(err?.message ?? err).slice(0, 80)); }
+  render() {
+    if (this.state.err) {
+      return (
+        <div style={{ padding: 24, paddingTop: 60 }}>
+          <div className="card"><div className="card-title">App crashed</div>
+          <div className="num" style={{ fontSize: 12, color: "var(--down)", wordBreak: "break-word" }}>{String(this.state.err?.message ?? this.state.err)}</div></div>
+          <button className="btn primary" onClick={() => window.location.reload()}>Reload</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function Root() {
   const { loading, clerk, signedIn } = useClerkSession();
 
@@ -226,5 +269,15 @@ function Root() {
   }
   return signedIn ? <Shell clerk={clerk} /> : <LoginScreen clerk={clerk} />;
 }
+
+function AppRoot() {
+  return (
+    <RootErrorBoundary>
+      <Root />
+      <DebugStrip />
+    </RootErrorBoundary>
+  );
+}
+
 
 createRoot(document.getElementById("root")).render(<Root />);
