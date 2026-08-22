@@ -347,6 +347,16 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
+function PartnerHostGuard() {
+  const [location, setLocation] = useLocation();
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.hostname === "partner.veloztrade.com" && location === "/") {
+      setLocation("/ib");
+    }
+  }, [location, setLocation]);
+  return null;
+}
+
 function ClerkProviderWithRoutes() {
   const [, setLocation] = useLocation();
 
@@ -384,6 +394,7 @@ function ClerkProviderWithRoutes() {
         <ClerkQueryClientCacheInvalidator />
         <ReferralCodeActivator />
         <WebSocketProvider>
+          <PartnerHostGuard/>
           <AlertMonitor/>
           <MarginCallMonitor/>
           <LiveChat/>

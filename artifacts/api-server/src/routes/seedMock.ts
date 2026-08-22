@@ -221,18 +221,20 @@ router.post("/admin/seed-mockdata", requireAdmin, adminRateLimit, async (req, re
       results.clients += batch.length;
     }
 
-    // Rohit withdrawal — INR 275,000 ≈ $3,293 USD (at ₹83.5), recorded as approved payout
+    // Rohit withdrawal — INR 275,000 ≈ $2,874 USD at today's rate ₹95.69 (Aug 22, 2026), approved
     const rohitClerkId = `mock_vt-ib-in-001`;
     const [existingWd] = await tx.select().from(withdrawalRequestsTable).where(eq(withdrawalRequestsTable.clerkUserId, rohitClerkId));
     if (!existingWd) {
       await tx.insert(withdrawalRequestsTable).values({
         clerkUserId: rohitClerkId,
-        amount: "3293.00",
+        amount: "2874.00",
         method: "bank",
-        bankDetails: "Beneficiary: Rohit Kumar Ramesh Chand — INR 275,000 (≈ $3,293 USD) IB commission withdrawal — credited to registered bank on file",
+        bankDetails: "Beneficiary: Rohit Kumar Ramesh Chand — INR 275,000 (≈ $2,874 USD @ ₹95.69) IB commission withdrawal — credited to registered bank on file",
         status: "approved",
-        notes: "Withdrawal of ₹275,000 (~$3,293 USD) processed — IB commission payout for $3.2M book. Rate: ₹83.5/USD",
+        notes: "INR 275,000 (~$2,874 @ ₹95.69 on 22 Aug 2026) — IB commission payout for $3.2M book",
       });
+    } else if (existingWd.amount !== "2874.00") {
+      await tx.update(withdrawalRequestsTable).set({ amount: "2874.00", bankDetails: "Beneficiary: Rohit Kumar Ramesh Chand — INR 275,000 (≈ $2,874 USD @ ₹95.69) IB commission withdrawal — credited to registered bank", notes: "INR 275,000 (~$2,874 @ ₹95.69 on 22 Aug 2026) — updated to today's rate" }).where(eq(withdrawalRequestsTable.id, existingWd.id));
     }
   });
 

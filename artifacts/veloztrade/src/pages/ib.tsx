@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Redirect } from "wouter";
 import { Users, DollarSign, TrendingUp, Building2, Award, ShieldCheck, ArrowDownToLine, Globe, BarChart3, Layers } from "lucide-react";
@@ -12,6 +12,62 @@ interface IbMe {
 }
 
 function fmt(n: number) { return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+function IbClientsTable() {
+  const [page, setPage] = React.useState(1);
+  const { data, isLoading } = useQuery<{ total: number; page: number; limit: number; clients: Array<{ clerkUserId: string; name: string; email: string; balance: number; accountType: string; kycStatus: string; leverage: number; currency: string; referredBy: string; depositStatus: string; createdAt: string }> }>({
+    queryKey: ["ib-clients", page],
+    queryFn: async () => {
+      const res = await fetch(`/api/ib/clients?page=${page}&limit=50`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+  });
+  const clients = data?.clients ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / 50));
+  return (
+    <div className="glass-card rounded-2xl border border-border overflow-hidden">
+      <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+        <h2 className="font-bold flex items-center gap-2"><Users className="w-5 h-5 text-primary"/> Client Details — {total} total</h2>
+        <span className="text-xs text-muted-foreground">Page {page} of {totalPages}</span>
+      </div>
+      {isLoading ? <div className="p-6"><Skeleton className="h-64 w-full"/></div> : clients.length === 0 ? <div className="p-10 text-center text-sm text-muted-foreground">No clients yet.</div> : (
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[800px]">
+              <thead><tr className="border-b border-border bg-muted/20">
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase">#</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase">Client</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase">Email</th>
+                <th className="text-right px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase">Balance</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase">Tier</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase">KYC</th>
+                <th className="text-right px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase">Leverage</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase">Referred By</th>
+              </tr></thead>
+              <tbody>
+                {clients.map((c, i) => (
+                  <tr key={c.clerkUserId} className="border-b border-border/40 hover:bg-muted/10">
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{(page-1)*50 + i + 1}</td>
+                    <td className="px-4 py-3 font-medium text-foreground">{c.name}</td>
+                    <td className="px-4 py-3 text-xs font-mono text-muted-foreground">{c.email}</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold">${fmt(c.balance)}</td>
+                    <td className="px-4 py-3"><span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary uppercase">{c.accountType}</span></td>
+                    <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${c.kycStatus==="verified"?"bg-emerald-400/10 text-emerald-400":c.kycStatus==="pending"?"bg-amber-400/10 text-amber-400":"bg-muted text-muted-foreground"}`}>{c.kycStatus}</span></td>
+                    <td className="px-4 py-3 text-right font-mono text-xs">1:{c.leverage}</td>
+                    <td className="px-4 py-3 text-xs font-mono text-muted-foreground">{c.referredBy}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {totalPages > 1 && <div className="px-5 py-3 border-t border-border flex items-center justify-between"><span className="text-xs text-muted-foreground">{total} clients</span><div className="flex gap-2"><button disabled={page===1} onClick={()=>setPage(p=>p-1)} className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-muted disabled:opacity-40">Prev</button><button disabled={page===totalPages} onClick={()=>setPage(p=>p+1)} className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-muted disabled:opacity-40">Next</button></div></div>}
+        </>
+      )}
+    </div>
+  );
+}
 
 export function IbPanel() {
   useEffect(() => { document.title = "IB Panel | VelozTrade"; }, []);
@@ -68,7 +124,7 @@ export function IbPanel() {
           <div className="grid sm:grid-cols-3 gap-4 mt-4 text-sm">
             <div><div className="text-xs text-muted-foreground">Fund Through Clients</div><div className="text-xl font-black font-mono text-foreground">$3,200,000.00</div><div className="text-xs text-muted-foreground">26 active clients</div></div>
             <div><div className="text-xs text-muted-foreground">Commission Earned</div><div className="text-xl font-black font-mono text-emerald-400">$18,450.00</div><div className="text-xs text-muted-foreground">CPA + Rev Share + Override</div></div>
-            <div><div className="text-xs text-muted-foreground">Withdrawal Processed</div><div className="text-xl font-black font-mono text-foreground">$3,293.00</div><div className="text-xs text-muted-foreground">INR 275,000 · Approved · Bank Wire</div></div>
+            <div><div className="text-xs text-muted-foreground">Withdrawal Processed</div><div className="text-xl font-black font-mono text-foreground">$2,874.00</div><div className="text-xs text-muted-foreground">INR 275,000 @ ₹95.69 (22 Aug 2026) · Approved · Bank Wire</div></div>
           </div>
           <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground"><ShieldCheck className="w-4 h-4 text-emerald-400"/>FSCA License No. 51748 · Segregated accounts · 24–48h withdrawal SLA</div>
         </div>
@@ -91,10 +147,12 @@ export function IbPanel() {
       <div className="glass-card rounded-2xl border border-border p-6">
         <h2 className="font-bold flex items-center gap-2"><ArrowDownToLine className="w-5 h-5 text-primary"/> Recent Withdrawal</h2>
         <div className="mt-4 p-4 rounded-xl bg-muted/20 border border-border flex items-center justify-between flex-wrap gap-3">
-          <div><div className="font-mono font-bold">$3,293.00 <span className="text-xs font-normal text-muted-foreground">(INR 275,000 @ ₹83.5)</span></div><div className="text-xs text-muted-foreground">Bank Wire · Approved · {isRohit ? "rohitkatariya1820@gmail.com" : data.referralCode}</div></div>
+          <div><div className="font-mono font-bold">$2,874.00 <span className="text-xs font-normal text-muted-foreground">(INR 275,000 @ ₹95.69 — 22 Aug 2026)</span></div><div className="text-xs text-muted-foreground">Bank Wire · Approved · {isRohit ? "rohitkatariya1820@gmail.com" : data.referralCode}</div></div>
           <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-400/10 text-emerald-400 border border-emerald-400/30">APPROVED</span>
         </div>
       </div>
+
+      <IbClientsTable />
     </div>
   );
 }

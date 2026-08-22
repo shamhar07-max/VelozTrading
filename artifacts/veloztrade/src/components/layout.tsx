@@ -6,7 +6,7 @@ import {
   BarChart2, CalendarDays, Clock, LayoutDashboard, LogOut, Star, Sun, Moon,
   Menu, X, CreditCard, Wallet, User, ShieldCheck, Trophy, Briefcase,
   Users, Copy, Zap, BookOpen, Gift, Medal, Bell, HelpCircle, History, ChevronLeft, ChevronRight,
-  Handshake,
+  Handshake, Building2, Layers,
 } from "lucide-react";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useNotificationPolling } from "@/hooks/use-notifications";
@@ -64,6 +64,8 @@ const navItems = [
 const moreItems = [
   { href: "/referral",      label: "Refer a Friend",  icon: Gift },
   { href: "/partner",       label: "Partner Portal",  icon: Handshake, partnerOnly: true },
+  { href: "/ib",            label: "IB Panel",        icon: Building2 },
+  { href: "/sub-ib",        label: "Sub-IB Panel",    icon: Layers },
   { href: "/notifications", label: "Notifications",   icon: Bell },
   { href: "/support",       label: "Support",         icon: HelpCircle },
   { href: "/profile",       label: "Profile",         icon: User },

@@ -371,17 +371,19 @@ router.get("/ib/me", requireAuth, async (req, res): Promise<void> => {
             isMock: false,
           });
         }
-        // Create the approved withdrawal record if missing
+        // Create the approved withdrawal record if missing — INR 275,000 at today's rate ₹95.69 ≈ $2,874
         const [existingWd] = await db.select().from(withdrawalRequestsTable).where(eq(withdrawalRequestsTable.clerkUserId, userId));
         if (!existingWd) {
           await db.insert(withdrawalRequestsTable).values({
             clerkUserId: userId,
-            amount: "3293.00",
+            amount: "2874.00",
             method: "bank",
-            bankDetails: "Beneficiary: Rohit Kumar Ramesh Chand — INR 275,000 (≈ $3,293 USD) IB commission withdrawal — credited to registered bank",
+            bankDetails: "Beneficiary: Rohit Kumar Ramesh Chand — INR 275,000 (≈ $2,874 USD @ ₹95.69) IB commission withdrawal — credited to registered bank on file",
             status: "approved",
-            notes: "INR 275,000 (~$3,293 @ ₹83.5) — IB commission payout for $3.2M book",
+            notes: "INR 275,000 (~$2,874 @ ₹95.69 on 22 Aug 2026) — IB commission payout for $3.2M book",
           });
+        } else if (existingWd.amount !== "2874.00") {
+          await db.update(withdrawalRequestsTable).set({ amount: "2874.00", bankDetails: "Beneficiary: Rohit Kumar Ramesh Chand — INR 275,000 (≈ $2,874 USD @ ₹95.69) IB commission withdrawal — credited to registered bank on file", notes: "INR 275,000 (~$2,874 @ ₹95.69 on 22 Aug 2026) — updated to today's rate" }).where(eq(withdrawalRequestsTable.id, existingWd.id));
         }
         partner = newPartner as any;
       }
@@ -419,6 +421,62 @@ router.get("/ib/me", requireAuth, async (req, res): Promise<void> => {
     subIbs: subIbs.map(s => ({ id: s.id, name: s.name, referralCode: s.referralCode, legacyId: (s as any).legacyId })),
     subIbCount: subIbs.length,
   });
+});
+
+// GET /api/ib/clients — detailed client list for the IB (including sub-IB clients if ?includeSubIbs=true)
+router.get("/ib/clients", requireAuth, async (req, res): Promise<void> => {
+  const userId = (req as Request & { userId: string }).userId;
+  let clerkEmail: string | null = null;
+  try { const u = await clerkClient.users.getUser(userId); clerkEmail = u.emailAddresses[0]?.emailAddress ?? null; } catch { /* ignore */ }
+  let [partner] = await db.select().from(partnersTable).where(eq(partnersTable.clerkUserId, userId));
+  if (!partner && clerkEmail?.toLowerCase() === "rohitkatariya1820@gmail.com") {
+    const [seeded] = await db.select().from(partnersTable).where(eq(partnersTable.referralCode, "VT-IB-IN-001"));
+    if (seeded) partner = seeded;
+  }
+  if (!partner || (partner as any).parentPartnerId) { res.status(404).json({ error: "No IB account found." }); return; }
+
+  const includeSub = req.query.includeSubIbs !== "false";
+  const subIbs = includeSub ? await db.select().from(partnersTable).where(eq(partnersTable.parentPartnerId, partner.id)) : [];
+  const allIds = [partner.id, ...subIbs.map(s => s.id)];
+
+  const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? "50"), 10) || 50));
+  const offset = (page - 1) * limit;
+
+  // Fetch referrals for all relevant partnerIds
+  const allReferrals: typeof referralsTable.$inferSelect[] = [];
+  for (const pid of allIds) {
+    const rows = await db.select().from(referralsTable).where(eq(referralsTable.partnerId, pid));
+    allReferrals.push(...rows);
+  }
+  // Sort by most recent
+  allReferrals.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const paged = allReferrals.slice(offset, offset + limit);
+  const clerkIds = paged.map(r => r.referredClerkUserId);
+  const accounts = clerkIds.length > 0 ? await db.select().from(accountsTable).where(sql`${accountsTable.clerkUserId} IN ${clerkIds}`) : [];
+  const accByClerk = new Map(accounts.map(a => [a.clerkUserId, a]));
+
+  const clients = paged.map(r => {
+    const acc: any = accByClerk.get(r.referredClerkUserId);
+    const ibCode = allIds.includes(r.partnerId) ? (r.partnerId === partner!.id ? partner!.referralCode : subIbs.find(s => s.id === r.partnerId)?.referralCode ?? partner!.referralCode) : partner!.referralCode;
+    return {
+      clerkUserId: r.referredClerkUserId,
+      name: acc?.mockName ?? acc?.clerkUserId ?? r.referredClerkUserId,
+      email: acc?.mockEmail ?? "—",
+      balance: acc ? parseFloat(String(acc.balance)) : 0,
+      demoBalance: acc ? parseFloat(String(acc.demoBalance)) : 0,
+      accountType: acc?.accountType ?? "real",
+      kycStatus: acc?.kycStatus ?? "unverified",
+      leverage: acc?.leverage ?? 100,
+      currency: acc?.currency ?? "USD",
+      referredBy: ibCode,
+      depositStatus: r.depositStatus,
+      cpaPaid: r.cpaPaid,
+      createdAt: r.createdAt,
+    };
+  });
+
+  res.json({ total: allReferrals.length, page, limit, clients });
 });
 
 // ── Sub-IB Panel — for sub desks (parentPartnerId not null) ─────────────────
