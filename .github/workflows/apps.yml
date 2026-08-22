@@ -31,10 +31,23 @@ jobs:
         run: pnpm --filter @workspace/veloztrade run build
       - name: Install Android wrapper deps
         working-directory: artifacts/app-android
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
+      - name: Accept Android SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
       - name: Add Android platform
         working-directory: artifacts/app-android
-        run: npx cap add android || true
+        run: npx cap add android
+      - name: Apply brand icons & splash
+        working-directory: artifacts/app-android
+        run: |
+          R=android/app/src/main/res
+          mkdir -p $R/drawable
+          cp resources/splash.png $R/drawable/splash.png
+          cp resources/mipmap-mdpi/ic_launcher.png    $R/mipmap-mdpi/ic_launcher.png
+          cp resources/mipmap-hdpi/ic_launcher.png    $R/mipmap-hdpi/ic_launcher.png
+          cp resources/mipmap-xhdpi/ic_launcher.png   $R/mipmap-xhdpi/ic_launcher.png
+          cp resources/mipmap-xxhdpi/ic_launcher.png  $R/mipmap-xxhdpi/ic_launcher.png
+          cp resources/mipmap-xxxhdpi/ic_launcher.png $R/mipmap-xxxhdpi/ic_launcher.png
       - name: Sync
         working-directory: artifacts/app-android
         run: npx cap sync android
