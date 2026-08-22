@@ -13,7 +13,13 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "node --enable-source-maps artifacts/api-server/dist/migrate.mjs && node --enable-source-maps artifacts/api-server/dist/index.mjs"
+# Chain semantics:
+#   1. migrate runs; its failure does NOT abort the chain (|| true) so the
+#      rescue server can still report the cause over HTTP
+#   2. main app starts
+#   3. if the main app exits/crashes for ANY reason, the rescue diagnostic
+#      server takes the port and answers every request with the failure class
+startCommand = "sh -c \"(node --enable-source-maps artifacts/api-server/dist/migrate.mjs || true) && { node --enable-source-maps artifacts/api-server/dist/index.mjs || node --enable-source-maps artifacts/api-server/dist/rescue.mjs; }\""
 # Health-check gating REMOVED by request: Railway now considers the deploy
 # live as soon as the container starts instead of blocking on probe retries.
 # The /api/healthz route stays available for manual/uptime monitoring —

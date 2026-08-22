@@ -51,4 +51,7 @@ COPY --from=build /app/lib/db/drizzle ./migrations
 EXPOSE 8080
 # Auto-migrate on boot, then start the server. Migrations are idempotent and
 # guarded by a Postgres advisory lock, so restarts and replicas are safe.
-CMD ["sh", "-c", "node --enable-source-maps artifacts/api-server/dist/migrate.mjs && exec node --enable-source-maps artifacts/api-server/dist/index.mjs"]
+# If the main server crashes at boot, the rescue diagnostic server takes the
+# port so deployments always answer with the failure reason instead of a
+# silent 503 (see railway.toml startCommand for the same chain).
+CMD ["sh", "-c", "(node --enable-source-maps artifacts/api-server/dist/migrate.mjs || true) && { node --enable-source-maps artifacts/api-server/dist/index.mjs || node --enable-source-maps artifacts/api-server/dist/rescue.mjs; }"]
