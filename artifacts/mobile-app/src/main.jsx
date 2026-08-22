@@ -178,7 +178,7 @@ function Shell({ clerk }) {
       <main className="screen">
         {tab === "markets" && (
           <>
-            <HeroEquity prices={prices} instruments={instruments} onTrade={(s) => setTradeSym(s)} />
+            <HeroEquity prices={prices} connected={connected} instruments={instruments} onTrade={(s) => setTradeSym(s)} />
             <Markets instruments={instruments} prices={prices} onTrade={(i) => setTradeSym(i.symbol)} />
           </>
         )}
@@ -208,7 +208,7 @@ function Shell({ clerk }) {
   );
 }
 
-function HeroEquity({ prices }) {
+function HeroEquity({ prices, connected }) {
   const [acc, setAcc] = useState(null);
   useEffect(() => {
     fetch("/api/account", { credentials: "include" }).then(r => r.ok ? r.json() : null).then(setAcc);
