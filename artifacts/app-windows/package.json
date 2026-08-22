@@ -1,0 +1,49 @@
+{
+  "name": "veloztrade-windows",
+  "version": "1.0.0",
+  "private": true,
+  "description": "VelozTrade — Native Windows app (Electron wrapper for veloztrade.com)",
+  "author": "VelozTrade <support@veloztrade.com>",
+  "main": "src/main.js",
+  "scripts": {
+    "dev": "electron .",
+    "build:web": "pnpm --filter @workspace/veloztrade run build",
+    "build": "electron-builder --win --x64 --ia32",
+    "build:portable": "electron-builder --win portable --x64",
+    "dist": "pnpm run build",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "electron-serve": "^1.2.0",
+    "electron-store": "^8.1.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.veloztrade.app",
+    "productName": "VelozTrade",
+    "copyright": "Copyright © 2026 VelozTrade",
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64", "ia32"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "publisherName": "VelozTrade"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "VelozTrade"
+    },
+    "portable": {
+      "artifactName": "VelozTrade-Portable-${version}.${ext}"
+    }
+  }
+}

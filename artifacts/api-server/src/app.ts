@@ -164,7 +164,15 @@ app.use(
     credentials: true,
     origin: (origin, callback) => {
       // Allow requests with no origin (server-to-server, curl, mobile apps)
-      if (!origin) return callback(null, true);
+      if (!origin || origin === "null") return callback(null, true);
+      // Native wrappers: Capacitor, Ionic, Electron, Tauri
+      if (
+        origin.startsWith("capacitor://") ||
+        origin.startsWith("ionic://") ||
+        origin.startsWith("tauri://") ||
+        origin.startsWith("http://localhost") ||
+        origin.startsWith("http://127.0.0.1")
+      ) return callback(null, true);
       if (ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin)) {
         return callback(null, true);
       }

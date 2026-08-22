@@ -1,0 +1,76 @@
+name: Build Apps
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "artifacts/veloztrade/**"
+      - "artifacts/app-android/**"
+      - "artifacts/app-windows/**"
+      - ".github/workflows/apps.yml"
+  workflow_dispatch:
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+      - name: Build web
+        run: pnpm --filter @workspace/veloztrade run build
+      - name: Install Android wrapper deps
+        working-directory: artifacts/app-android
+        run: pnpm install
+      - name: Add Android platform
+        working-directory: artifacts/app-android
+        run: npx cap add android || true
+      - name: Sync
+        working-directory: artifacts/app-android
+        run: npx cap sync android
+      - name: Build Debug APK
+        working-directory: artifacts/app-android
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VelozTrade-Android-APK
+          path: artifacts/app-android/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: warn
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+      - name: Build web
+        run: pnpm --filter @workspace/veloztrade run build
+      - name: Install Windows wrapper deps
+        working-directory: artifacts/app-windows
+        run: pnpm install
+      - name: Build Windows installer
+        working-directory: artifacts/app-windows
+        run: pnpm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VelozTrade-Windows-Installer
+          path: artifacts/app-windows/release/*
+          if-no-files-found: warn
