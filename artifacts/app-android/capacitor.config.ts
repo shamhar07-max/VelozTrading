@@ -1,34 +1,37 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
+// ── VelozTrade Android shell ────────────────────────────────────────────────
+// Architecture (senior decision, 2026-08): REMOTE SHELL.
+//   The WebView loads the live site directly. Rationale:
+//   • Clerk sessions are same-origin cookies — bundled SPA + cross-origin API
+//     breaks auth silently (the original blank-screen bug)
+//   • /config.js runtime key injection only exists behind Express
+//   • UI fixes deploy instantly with zero app updates
+// The bundled webDir remains as required scaffolding + offline error page.
 const config: CapacitorConfig = {
   appId: 'com.veloztrade.app',
   appName: 'VelozTrade',
   webDir: '../veloztrade/dist/public',
-  // Bundled build is primary. Live API/WebSocket goes to veloztrade.com.
-  // For development, uncomment server.url to live-reload from production:
-  // server: {
-  //   url: 'https://veloztrade.com',
-  //   cleartext: true,
-  // },
   server: {
+    // Primary: always load the live platform (auth + WS + config.js intact)
+    url: 'https://veloztrade.com',
     androidScheme: 'https',
-    // Allow navigation to veloztrade.com and subdomains
-    allowNavigation: ['veloztrade.com', '*.veloztrade.com', 'veloztrading-production.up.railway.app'],
+    allowNavigation: [
+      'veloztrade.com', '*.veloztrade.com',
+      'veloztrading-production.up.railway.app',
+      'clerk.veloztrade.com', '*.clerk.accounts.dev',
+    ],
   },
   android: {
     backgroundColor: '#0f172a',
-    allowMixedContent: false,
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 1500,
+      launchShowDuration: 1200,
       backgroundColor: '#0f172a',
-      // Brand assets live in resources/ — copy into android/res after `cap add`:
-      //   resources/splash.png → android/app/src/main/res/drawable*/splash.png
-      //   resources/icon.png / icon-foreground.png → mipmap-* launchers
-      showSpinner: false,
       splashFullScreen: true,
       splashImmersive: true,
+      showSpinner: false,
     },
     Keyboard: {
       resize: 'body',

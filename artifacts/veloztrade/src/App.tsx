@@ -361,8 +361,17 @@ function ClerkProviderWithRoutes() {
   const [, setLocation] = useLocation();
 
   if (!clerkPubKey) {
-    throw new Error(
-      "Missing Clerk publishable key. Set VITE_CLERK_PUBLISHABLE_KEY in your environment.",
+    // Branded failure instead of a white screen (the old blank-screen bug)
+    return (
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-background px-6 text-center gap-4">
+        <img src={`${basePath}/logo.svg`} alt="" className="w-14 h-14 opacity-80" />
+        <h1 className="text-xl font-bold">Configuration required</h1>
+        <p className="text-sm text-muted-foreground max-w-sm">
+          The publishable key is missing from this deployment.
+          Set <code className="font-mono text-primary">CLERK_PUBLISHABLE_KEY</code> in the host environment and reload.
+        </p>
+        <a href="/" className="text-sm font-semibold text-primary underline">Retry</a>
+      </div>
     );
   }
 

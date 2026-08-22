@@ -488,3 +488,14 @@ body {
     flex: none !important;
   }
 }
+
+/* ── Native app feel (Capacitor shell + mobile web) ───────────────────────── */
+html, body {
+  overscroll-behavior-y: none;           /* no pull-down glow/refresh flash   */
+  -webkit-tap-highlight-color: transparent;
+}
+nav, header, button {
+  -webkit-user-select: none; user-select: none; /* no accidental text popups */
+}
+/* Safe-area insets for edge-to-edge Android/iOS */
+.safe-area-pt { padding-top: env(safe-area-inset-top); }

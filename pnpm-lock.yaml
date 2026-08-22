@@ -392,6 +392,18 @@ importers:
 
   artifacts/veloztrade:
     dependencies:
+      '@capacitor/app':
+        specifier: ^6.0.3
+        version: 6.0.3(@capacitor/core@6.2.1)
+      '@capacitor/core':
+        specifier: ^6.2.1
+        version: 6.2.1
+      '@capacitor/splash-screen':
+        specifier: ^6.0.4
+        version: 6.0.4(@capacitor/core@6.2.1)
+      '@capacitor/status-bar':
+        specifier: ^6.0.3
+        version: 6.0.3(@capacitor/core@6.2.1)
       '@clerk/react':
         specifier: ^6.7.1
         version: 6.7.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0)

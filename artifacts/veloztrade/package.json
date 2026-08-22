@@ -72,6 +72,10 @@
     "zod": "catalog:"
   },
   "dependencies": {
+    "@capacitor/app": "^6.0.3",
+    "@capacitor/core": "^6.2.1",
+    "@capacitor/splash-screen": "^6.0.4",
+    "@capacitor/status-bar": "^6.0.3",
     "@clerk/react": "^6.7.1",
     "@clerk/themes": "^2.4.57",
     "@rainbow-me/rainbowkit": "^2.2.11",
