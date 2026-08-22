@@ -52,6 +52,21 @@ function useClerkSession() {
   const [state, setState] = useState({ loading: true, clerk: null, signedIn: false });
 
   async function boot() {
+    // Live Clerk keys are domain-locked to veloztrade.com. If someone opens
+    // the app UI from another host (railway.app preview, IP, etc.), bounce
+    // to the canonical domain instead of failing with an auth error.
+    const host = window.location.hostname;
+    const isCanonical =
+      host === "veloztrade.com" || host.endsWith(".veloztrade.com");
+    const key0 = window.__VELOZTRADE_CONFIG__?.clerkPublishableKey;
+    if (key0?.startsWith("pk_live_") && !isCanonical && host !== "localhost") {
+      setBoot("host", "bounce");
+      window.location.replace(
+        "https://veloztrade.com" + window.location.pathname + window.location.search
+      );
+      return;
+    }
+
     const cfg = await loadConfig();
     const key =
       cfg.clerkPublishableKey ||
@@ -262,8 +277,16 @@ function Root() {
       <div className="login-wrap">
         <div className="login-logo"><BrandMark size={64}/><div className="t">Veloz<span style={{color:"var(--brand2)"}}>Trade</span></div></div>
         <div className="card"><div className="empty">
-          Cannot reach authentication.<br/>Check your connection and reopen the app.
+          {state.noKey
+            ? "Configuration required — deploy with CLERK_PUBLISHABLE_KEY set."
+            : "Could not initialize authentication on this domain."}
         </div></div>
+        <button
+          className="btn primary"
+          onClick={() => window.location.replace("https://veloztrade.com" + window.location.pathname)}
+        >
+          Continue on veloztrade.com
+        </button>
       </div>
     );
   }
