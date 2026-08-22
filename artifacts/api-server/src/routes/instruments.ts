@@ -7,7 +7,7 @@ import {
   GetCandlesResponse,
   GetMarketMoversResponse,
 } from "@workspace/api-zod";
-import { getCandles as fetchCandles } from "../lib/twelvedata";
+import { getOmniCandles as fetchCandles } from "../lib/omniPrice";
 import { priceCache, changePercentCache } from "../ws/priceStreamer";
 import { requireAuth } from "../middlewares/requireAuth";
 

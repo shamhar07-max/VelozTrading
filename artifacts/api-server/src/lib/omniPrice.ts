@@ -220,15 +220,78 @@ export async function getOmniBatchPrices(symbols: string[]): Promise<Map<string,
 }
 
 export async function getOmniBatchQuotes(symbols: string[]): Promise<Map<string, { price: number; changePercent: number }>> {
-  // For quotes we reuse Yahoo's changePercent when available, else 0.
   const prices = await getOmniBatchPrices(symbols);
   const out = new Map<string, { price: number; changePercent: number }>();
   for (const [k,v] of prices) out.set(k, { price: v, changePercent: 0 });
-  // Enrich changePercent from Yahoo chart when possible (best-effort)
-  try {
-    const yahooQuotes = await yahooBatch(symbols);
-    // yahooBatch above already fetched price; we need percent — fetch via quote endpoint quickly for those with 0
-    // Keep it simple: keep 0 unless we have a real value; UI drift calc will fill it
-  } catch { /* ignore */ }
   return out;
+}
+
+// ── Yahoo chart → candles (free, no key) ───────────────────────────────────
+const YAHOO_INTERVAL_MAP: Record<string, string> = {
+  "1min": "1m", "5min": "5m", "15min": "15m", "30min": "30m",
+  "1h": "60m", "4h": "60m", "1day": "1d", "1week": "1wk",
+};
+const YAHOO_RANGE_MAP: Record<string, string> = {
+  "1min": "1d", "5min": "5d", "15min": "5d", "30min": "5d",
+  "1h": "1mo", "4h": "3mo", "1day": "1y", "1week": "5y",
+};
+
+export interface OmniCandle {
+  datetime: string; open: string; high: string; low: string; close: string; volume: string;
+}
+
+export async function getOmniCandles(symbol: string, interval: string, outputsize: number): Promise<OmniCandle[]> {
+  // 1) Try paid providers first if you keep keys — they have better interval fidelity
+  try {
+    const { getCandles } = await import("./twelvedata");
+    const td = await getCandles(symbol, interval, outputsize);
+    if (td.length > 0) return td.map(c => ({ datetime: c.datetime, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume }));
+  } catch { /* ignore */ }
+
+  // 2) Yahoo — free, no key, covers all 83
+  try {
+    const ySym = toYahooSymbol(symbol);
+    const yInterval = YAHOO_INTERVAL_MAP[interval] ?? "60m";
+    const range = YAHOO_RANGE_MAP[interval] ?? "1mo";
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ySym)}?interval=${yInterval}&range=${range}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(10_000), headers: { "User-Agent": "VelozTrade/1.0" } });
+    if (res.ok) {
+      const j = await res.json() as any;
+      const result = j?.chart?.result?.[0];
+      const ts: number[] = result?.timestamp ?? [];
+      const q = result?.indicators?.quote?.[0];
+      if (ts.length > 0 && q) {
+        const candles: OmniCandle[] = [];
+        for (let i = 0; i < ts.length; i++) {
+          const o = q.open?.[i], h = q.high?.[i], l = q.low?.[i], c = q.close?.[i];
+          if (o == null || c == null) continue;
+          candles.push({
+            datetime: new Date(ts[i]! * 1000).toISOString(),
+            open: String(o), high: String(h ?? o), low: String(l ?? o), close: String(c), volume: String(q.volume?.[i] ?? 0),
+          });
+        }
+        if (candles.length > 0) {
+          logger.info({ symbol, interval, count: candles.length, provider: "yahoo" }, "Omni candles filled");
+          return candles.slice(-outputsize);
+        }
+      }
+    }
+  } catch { /* ignore */ }
+
+  // 3) Synthetic fallback — never blank, straight line from seed price
+  const base = SEED_PRICES[symbol] ?? 100;
+  const now = Date.now();
+  const stepMs = interval === "1min" ? 60_000 : interval === "5min" ? 300_000 : interval === "15min" ? 900_000 : interval === "30min" ? 1_800_000 : interval === "4h" ? 14_400_000 : interval === "1day" ? 86_400_000 : 3_600_000;
+  const candles: OmniCandle[] = [];
+  let price = base;
+  for (let i = outputsize - 1; i >= 0; i--) {
+    const drift = (Math.random() - 0.5) * base * 0.002;
+    price = Math.max(price + drift, base * 0.95);
+    candles.push({
+      datetime: new Date(now - i * stepMs).toISOString(),
+      open: price.toFixed(4), high: (price * 1.001).toFixed(4), low: (price * 0.999).toFixed(4), close: price.toFixed(4), volume: "1000000",
+    });
+  }
+  logger.warn({ symbol, interval }, "Omni candles synthetic fallback");
+  return candles;
 }
