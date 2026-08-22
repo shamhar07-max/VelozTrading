@@ -75,17 +75,12 @@ function useClerkSession() {
 }
 
 function LoginScreen({ clerk }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    if (!clerk || !ref.current) return;
-    try {
-      clerk.openSignIn?.({ rootId: "clerk-root" }) ||
-        clerk.mountSignIn(ref.current, { redirectUrl: "/m/", routing: "hash" });
-    } catch {
-      ref.current.innerHTML =
-        '<div class="empty">Open veloztrade.com once to sign in,<br/>then return to this app.</div>';
-    }
-  }, [clerk]);
+  const [redirecting, setRedirecting] = useState(false);
+  const go = (path) => { setRedirecting(true); window.location.href = path; };
+
+  // Redirect-based sign-in: reuses the platform's proven login page on the
+  // same origin. Session cookie is set there, then Clerk sends us back to
+  // /m/ already authenticated — no embedded-component fragility.
   return (
     <div className="login-wrap">
       <div className="login-logo">
@@ -93,9 +88,31 @@ function LoginScreen({ clerk }) {
         <div className="t">Veloz<span style={{ color: "var(--brand2)" }}>Trade</span></div>
         <div className="s">Markets · Margin · Momentum</div>
       </div>
-      <div id="clerk-root" ref={ref}>
-        <div className="spinner" />
+
+      <div className="card" style={{ textAlign: "center", padding: "22px 18px" }}>
+        <p style={{ margin: "0 0 16px", color: "var(--text-dim)", fontSize: 13.5 }}>
+          Sign in once to sync your portfolio,<br />live prices and positions.
+        </p>
+        <button
+          className="btn primary"
+          disabled={redirecting}
+          onClick={() => go("/sign-in?redirect_url=" + encodeURIComponent("/m/"))}
+        >
+          {redirecting ? "Opening…" : "Sign in"}
+        </button>
+        <button
+          className="btn ghost"
+          style={{ marginTop: 10 }}
+          disabled={redirecting}
+          onClick={() => go("/sign-up?redirect_url=" + encodeURIComponent("/m/"))}
+        >
+          Create free account · $10k demo
+        </button>
       </div>
+
+      <p className="tiny" style={{ textAlign: "center", marginTop: 14 }}>
+        You'll return here automatically after signing in.
+      </p>
     </div>
   );
 }
