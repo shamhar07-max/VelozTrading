@@ -141,12 +141,20 @@ const clerkAppearance = {
 };
 
 function SignInPage() {
+  // Honor ?redirect_url=/m/ (mobile app hand-off) — falls back to defaults.
+  const redirect = new URLSearchParams(window.location.search).get("redirect_url") ?? undefined;
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4 relative overflow-hidden">
       <div className="absolute inset-0 bg-grid opacity-30"/>
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(0,114,255,0.08)_0%,transparent_60%)]"/>
       <div className="relative z-10 w-full max-w-md">
-        <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
+        <SignIn
+          routing="path"
+          path={`${basePath}/sign-in`}
+          signUpUrl={`${basePath}/sign-up`}
+          forceRedirectUrl={redirect}
+          fallbackRedirectUrl={redirect}
+        />
       </div>
     </div>
   );
@@ -219,6 +227,7 @@ function SignUpPage() {
   const [checkedTc, setCheckedTc] = useState(false);
   const [checkedAge, setCheckedAge] = useState(false);
   const [checkedRisk, setCheckedRisk] = useState(false);
+  const redirect = new URLSearchParams(window.location.search).get("redirect_url") ?? undefined;
 
   useReferralCodeCapture();
 
@@ -277,7 +286,13 @@ function SignUpPage() {
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4 relative overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(0,114,255,0.08)_0%,transparent_60%)]"/>
       <div className="relative z-10 w-full max-w-md">
-        <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
+        <SignUp
+          routing="path"
+          path={`${basePath}/sign-up`}
+          signInUrl={`${basePath}/sign-in`}
+          forceRedirectUrl={redirect}
+          fallbackRedirectUrl={redirect}
+        />
       </div>
     </div>
   );
