@@ -17,13 +17,18 @@ const config: CapacitorConfig = {
   },
   android: {
     backgroundColor: '#0f172a',
-    // Keep splash screen until WebView is ready
+    allowMixedContent: false,
   },
   plugins: {
     SplashScreen: {
       launchShowDuration: 1500,
       backgroundColor: '#0f172a',
+      // Brand assets live in resources/ — copy into android/res after `cap add`:
+      //   resources/splash.png → android/app/src/main/res/drawable*/splash.png
+      //   resources/icon.png / icon-foreground.png → mipmap-* launchers
       showSpinner: false,
+      splashFullScreen: true,
+      splashImmersive: true,
     },
     Keyboard: {
       resize: 'body',
