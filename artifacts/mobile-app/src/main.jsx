@@ -8,7 +8,10 @@ import Account from "./screens/Account";
 import { useLivePrices } from "./ws";
 import "./styles.css";
 
-const CLERK_JS = "https://cdn.jsdelivr.net/npm/@clerk/clerk-js@6/dist/clerk.browser.js";
+const CLERK_JS_SOURCES = [
+  "https://cdn.jsdelivr.net/npm/@clerk/clerk-js@6/dist/clerk.browser.js",
+  "https://unpkg.com/@clerk/clerk-js@6/dist/clerk.browser.js",
+];
 
 function loadConfig() {
   // /config.js sets window.__VELOZTRADE_CONFIG__ = { clerkPublishableKey }
@@ -20,15 +23,28 @@ function loadConfig() {
     document.head.appendChild(s);
   });
 }
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    const existing = document.querySelector(`script[src="${src}"]`);
-    if (existing) return resolve();
-    const s = document.createElement("script");
-    s.src = src; s.async = true;
-    s.onload = resolve; s.onerror = reject;
-    document.head.appendChild(s);
-  });
+
+/**
+ * Load clerk-js trying each CDN in order. The publishable key is passed via
+ * the data-clerk-publishable-key attribute (the official vanilla-JS pattern),
+ * then activated with Clerk.load().
+ */
+async function loadClerkJs(key) {
+  for (const src of CLERK_JS_SOURCES) {
+    try {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = src;
+        s.async = true;
+        s.setAttribute("data-clerk-publishable-key", key);
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+      if (window.Clerk) return window.Clerk;
+    } catch { /* try next source */ }
+  }
+  throw new Error("all clerk-js sources failed");
 }
 
 // ── Clerk session bootstrap ─────────────────────────────────
@@ -43,10 +59,8 @@ function useClerkSession() {
     if (!key) { setState({ loading: false, clerk: null, signedIn: false, noKey: true }); return; }
 
     try {
-      await loadScript(CLERK_JS);
-      const Clerk = window.Clerk;
-      await Clerk.load({ publishableKey: key });
-
+      const Clerk = await loadClerkJs(key);
+      await Clerk.load();
       const apply = (clerk) =>
         setState({ loading: false, clerk, signedIn: !!clerk.session });
 

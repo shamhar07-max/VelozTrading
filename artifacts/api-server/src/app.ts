@@ -38,6 +38,9 @@ app.use(
           "https://veloztrade.com",
           // Cloudflare Turnstile — Clerk's CAPTCHA provider for bot protection
           "https://challenges.cloudflare.com",
+          // Mobile app (/m) loads clerk-js + fallback CDNs directly
+          "https://cdn.jsdelivr.net",
+          "https://unpkg.com",
         ],
         // Clerk bot-protection CAPTCHA runs inside a Cloudflare Turnstile iframe.
         // Without frame-src the default-src 'self' fallback blocks it entirely.
