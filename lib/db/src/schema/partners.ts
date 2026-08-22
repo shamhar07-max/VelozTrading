@@ -1,4 +1,4 @@
-import { pgTable, serial, text, numeric, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, numeric, integer, timestamp, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -14,7 +14,7 @@ export const partnersTable = pgTable("partners", {
   commissionWallet: numeric("commission_wallet", { precision: 18, scale: 2 }).notNull().default("0.00"),
   status: text("status").notNull().default("active"),
   // Sub-IB hierarchy — null for top-level IBs, points to parent IB for sub-desks (Ops Report §5)
-  parentPartnerId: integer("parent_partner_id").references(() => partnersTable.id),
+  parentPartnerId: integer("parent_partner_id").references((): AnyPgColumn => partnersTable.id),
   legacyId: text("legacy_id").unique(),
   tier: text("tier").notNull().default("tier1"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

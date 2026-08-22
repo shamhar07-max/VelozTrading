@@ -46,7 +46,13 @@ const server = http.createServer((_req, res) => {
 });
 
 function listen(port: number, label: string): void {
-  const s = port === PORT ? server : http.createServer((_q, r) => server.handle(_q, r));
+  const s =
+    port === PORT
+      ? server
+      : http.createServer((req, res) => {
+          // Delegate auxiliary-port traffic to the primary handler
+          server.emit("request", req, res);
+        });
   s.on("error", (err: NodeJS.ErrnoException) => {
     console.log(`[rescue] port ${port} unavailable (${err.code ?? err.message}) — skipping`);
   });
