@@ -4,6 +4,7 @@ import type { Server } from "http";
 import { logger } from "../lib/logger";
 import { INSTRUMENTS, TIER_CONFIG, isMarketOpen } from "../lib/instruments";
 import { getBatchPrices, getBatchQuotes, setPriceCacheRef } from "../lib/twelvedata";
+import { getOmniBatchPrices, getOmniBatchQuotes } from "../lib/omniPrice";
 import { db, positionsTable, ordersTable, accountsTable, pendingOrdersTable, alertsTable, priceSnapshotsTable } from "@workspace/db";
 import { eq, sql, and } from "drizzle-orm";
 import { clerkClient } from "@clerk/express";
@@ -708,7 +709,7 @@ async function persistRealPrices(): Promise<void> {
 
 async function fetchAndBroadcastPrices() {
   try {
-    const prices = await getBatchPrices(STREAM_SYMBOLS);
+    const prices = await getOmniBatchPrices(STREAM_SYMBOLS);
     for (const [symbol, price] of prices.entries()) {
       realPriceCache.set(symbol, price);
       if (!priceCache.has(symbol)) {
@@ -716,7 +717,7 @@ async function fetchAndBroadcastPrices() {
         sessionOpenPriceCache.set(symbol, price);
       }
     }
-    logger.info({ count: prices.size }, "Refreshed real prices from TwelveData");
+    logger.info({ count: prices.size }, "Refreshed real prices (omni)");
     void persistRealPrices();
   } catch (err) {
     logger.error({ err }, "WebSocket price fetch error");
@@ -756,7 +757,7 @@ async function fillMissingPrices() {
   }
   logger.info({ count: missing.length, symbols: missing }, "fillMissingPrices: retrying missing symbols via quotes");
   try {
-    const quotes = await getBatchQuotes(missing);
+    const quotes = await getOmniBatchQuotes(missing);
     let filled = 0;
     const stillMissing: string[] = [];
     for (const symbol of missing) {
@@ -806,7 +807,7 @@ async function fillMissingPrices() {
 
 async function refreshChangePercents() {
   try {
-    const quotes = await getBatchQuotes(STREAM_SYMBOLS);
+    const quotes = await getOmniBatchQuotes(STREAM_SYMBOLS);
     for (const [symbol, data] of quotes.entries()) {
       changePercentCache.set(symbol, data.changePercent);
       if (!priceCache.has(symbol)) {
@@ -819,7 +820,7 @@ async function refreshChangePercents() {
         sessionOpenPriceCache.set(symbol, data.price);
       }
     }
-    logger.info({ count: quotes.size }, "Refreshed change percents from TwelveData quotes");
+    logger.info({ count: quotes.size }, "Refreshed change percents (omni)");
   } catch (err) {
     logger.error({ err }, "Quote refresh error");
   }

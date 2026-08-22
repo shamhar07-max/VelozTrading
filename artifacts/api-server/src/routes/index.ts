@@ -17,10 +17,12 @@ import cryptoDepositRouter from "./cryptoDeposit";
 import socialRouter from "./social";
 import exportPdfRouter from "./exportPdf";
 import partnerRouter from "./partner";
+import omniRouter from "./omni";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(omniRouter);
 router.use(accountRouter);
 router.use(instrumentsRouter);
 router.use(positionsRouter);
