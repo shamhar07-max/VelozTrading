@@ -19,6 +19,7 @@ const DOWN = "#f6465d";
 export default function CandleChart({ symbol }) {
   const [intervalId, setIntervalId] = useState("1h");
   const [status, setStatus] = useState("loading"); // loading | ok | empty | error
+  const [data, setData] = useState(null);
   const boxRef = useRef(null);
   const chartRef = useRef(null);
   const candleRef = useRef(null);
