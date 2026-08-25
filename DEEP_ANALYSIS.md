@@ -129,3 +129,9 @@ The database contains **17 PostgreSQL tables** managed via Drizzle ORM:
 ## 9. Conclusion
 
 The VelozTrade codebase exhibits strong software engineering standards with a modular ESM monorepo layout, explicit transactional ledger accounting, strict TypeScript type checking, and robust risk management math. All automated workspace typechecks and unit tests pass cleanly.
+
+---
+
+## 10. World-Class Transformation Blueprint
+
+For a complete architectural specification, liquidity routing design (A-Book/B-Book STP/ECN FIX bridge), high-throughput binary WebSocket tick engine, double-entry accounting model, TradingView integration, PAMM/MAM module, and RegTech compliance roadmap to transform VelozTrade into a tier-1 global retail & institutional CFD platform, see **[WORLD_CLASS_ROADMAP.md](./WORLD_CLASS_ROADMAP.md)**.
